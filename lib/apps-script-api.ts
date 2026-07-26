@@ -448,3 +448,33 @@ export async function enviarPruebaTelegram(token: string) {
     token,
   });
 }
+
+
+export type DatosPerfilMaestra = {
+  nombre: string;
+  apellido: string;
+  grado: string;
+  seccion: string;
+};
+
+export async function actualizarPerfilMaestra(
+  token: string,
+  datos: DatosPerfilMaestra
+) {
+  return llamarAppsScript<Maestra>({
+    action: "actualizarPerfilMaestra",
+    token,
+    data: datos,
+  });
+}
+
+export async function cambiarContrasenaMaestra(
+  token: string,
+  datos: { contrasenaActual: string; contrasenaNueva: string }
+) {
+  return llamarAppsScript<{ actualizado: boolean }>({
+    action: "cambiarContrasenaMaestra",
+    token,
+    data: datos,
+  });
+}
