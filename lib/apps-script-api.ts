@@ -1,4 +1,4 @@
-const APPS_SCRIPT_URL = process.env.NEXT_PUBLIC_APPS_SCRIPT_URL?.trim();
+const API_URL = "/api/apps-script";
 
 type ApiRequest = {
   action: string;
@@ -13,24 +13,25 @@ type ApiResponse<T> = {
 };
 
 export async function llamarAppsScript<T>(solicitud: ApiRequest): Promise<T> {
-  if (!APPS_SCRIPT_URL) {
-    throw new Error("No está configurada la URL de Google Apps Script.");
-  }
-
-  const respuesta = await fetch(APPS_SCRIPT_URL, {
+  const respuesta = await fetch(API_URL, {
     method: "POST",
-    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(solicitud),
+    cache: "no-store",
   });
 
-  if (!respuesta.ok) {
-    throw new Error(`Error de conexión: ${respuesta.status}`);
+  let contenido: ApiResponse<T>;
+
+  try {
+    contenido = (await respuesta.json()) as ApiResponse<T>;
+  } catch {
+    throw new Error("El servidor no devolvió una respuesta válida.");
   }
 
-  const contenido = (await respuesta.json()) as ApiResponse<T>;
-
-  if (!contenido.ok) {
-    throw new Error(contenido.error || "La operación no pudo completarse.");
+  if (!respuesta.ok || !contenido.ok) {
+    throw new Error(
+      contenido.error || `Error de conexión: ${respuesta.status}`
+    );
   }
 
   if (contenido.resultado === undefined) {
