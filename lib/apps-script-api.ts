@@ -277,3 +277,49 @@ export async function eliminarPlanificacion(
     data: { idPlanificacion },
   });
 }
+
+export type CumpleanosAlumno = {
+  idAlumno: string;
+  nombre: string;
+  apellido: string;
+  sexo: string;
+  grado: string;
+  seccion: string;
+  fechaNacimiento: string;
+  notas: string;
+};
+
+export type DatosCumpleanos = {
+  idAlumno: string;
+  fechaNacimiento: string;
+  notas: string;
+};
+
+export async function listarCumpleanos(token: string) {
+  return llamarAppsScript<CumpleanosAlumno[]>({
+    action: "listarCumpleanos",
+    token,
+  });
+}
+
+export async function guardarCumpleanos(
+  token: string,
+  datos: DatosCumpleanos
+) {
+  return llamarAppsScript<CumpleanosAlumno>({
+    action: "guardarCumpleanos",
+    token,
+    data: datos,
+  });
+}
+
+export async function eliminarCumpleanos(
+  token: string,
+  idAlumno: string
+) {
+  return llamarAppsScript<{ eliminado: boolean; idAlumno: string }>({
+    action: "eliminarCumpleanos",
+    token,
+    data: { idAlumno },
+  });
+}
