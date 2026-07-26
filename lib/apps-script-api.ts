@@ -218,3 +218,62 @@ export async function eliminarCalificacion(
     data: { idCalificacion },
   });
 }
+
+
+export type Planificacion = {
+  idPlanificacion: string;
+  titulo: string;
+  asignatura: string;
+  grado: string;
+  fecha: string;
+  objetivo: string;
+  contenido: string;
+  actividades: string;
+  recursos: string;
+  evaluacion: string;
+  estado: string;
+  fechaRegistro: string;
+};
+
+export type DatosPlanificacion = {
+  idPlanificacion?: string;
+  titulo: string;
+  asignatura: string;
+  grado: string;
+  fecha: string;
+  objetivo: string;
+  contenido: string;
+  actividades: string;
+  recursos: string;
+  evaluacion: string;
+  estado: string;
+};
+
+export async function listarPlanificaciones(token: string) {
+  return llamarAppsScript<Planificacion[]>({
+    action: "listarPlanificaciones",
+    token,
+  });
+}
+
+export async function guardarPlanificacion(
+  token: string,
+  datos: DatosPlanificacion
+) {
+  return llamarAppsScript<Planificacion>({
+    action: "guardarPlanificacion",
+    token,
+    data: datos,
+  });
+}
+
+export async function eliminarPlanificacion(
+  token: string,
+  idPlanificacion: string
+) {
+  return llamarAppsScript<{ eliminado: boolean; idPlanificacion: string }>({
+    action: "eliminarPlanificacion",
+    token,
+    data: { idPlanificacion },
+  });
+}
