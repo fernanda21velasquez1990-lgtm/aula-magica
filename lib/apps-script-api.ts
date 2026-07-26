@@ -323,3 +323,47 @@ export async function eliminarCumpleanos(
     data: { idAlumno },
   });
 }
+
+export type Reunion = {
+  idReunion: string;
+  titulo: string;
+  fecha: string;
+  hora: string;
+  lugar: string;
+  participantes: string;
+  temas: string;
+  acuerdos: string;
+  estado: string;
+};
+
+export type DatosReunion = {
+  idReunion?: string;
+  titulo: string;
+  fecha: string;
+  hora: string;
+  lugar: string;
+  participantes: string;
+  temas: string;
+  acuerdos: string;
+  estado: string;
+};
+
+export async function listarReuniones(token: string) {
+  return llamarAppsScript<Reunion[]>({ action: "listarReuniones", token });
+}
+
+export async function guardarReunion(token: string, datos: DatosReunion) {
+  return llamarAppsScript<Reunion>({
+    action: "guardarReunion",
+    token,
+    data: datos,
+  });
+}
+
+export async function eliminarReunion(token: string, idReunion: string) {
+  return llamarAppsScript<{ eliminado: boolean; idReunion: string }>({
+    action: "eliminarReunion",
+    token,
+    data: { idReunion },
+  });
+}
