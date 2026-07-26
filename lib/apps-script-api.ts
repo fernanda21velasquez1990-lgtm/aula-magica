@@ -411,3 +411,40 @@ export async function eliminarEventoAgenda(token: string, idEvento: string) {
     data: { idEvento },
   });
 }
+
+export type EstadoTelegram = {
+  configurado: boolean;
+  botUsuario: string;
+  vinculado: boolean;
+  chatId: string;
+  codigo: string;
+  codigoExpira: string;
+};
+
+export async function obtenerEstadoTelegram(token: string) {
+  return llamarAppsScript<EstadoTelegram>({
+    action: "obtenerEstadoTelegram",
+    token,
+  });
+}
+
+export async function generarCodigoTelegram(token: string) {
+  return llamarAppsScript<EstadoTelegram>({
+    action: "generarCodigoTelegram",
+    token,
+  });
+}
+
+export async function desvincularTelegram(token: string) {
+  return llamarAppsScript<EstadoTelegram>({
+    action: "desvincularTelegram",
+    token,
+  });
+}
+
+export async function enviarPruebaTelegram(token: string) {
+  return llamarAppsScript<{ enviado: boolean }>({
+    action: "enviarPruebaTelegram",
+    token,
+  });
+}

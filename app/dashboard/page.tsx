@@ -12,6 +12,7 @@ const opciones = [
   ["Cumpleaños","Consultar próximos cumpleaños.","🎂","/dashboard/cumpleanos"],
   ["Reuniones","Guardar reuniones y acuerdos.","🤝","/dashboard/reuniones"],
   ["Agenda","Organizar eventos y recordatorios.","📅","/dashboard/agenda"],
+  ["Telegram","Conectar el bot y consultar información.","✈️","/dashboard/telegram"],
 ] as const;
 
 export default function DashboardPage() {
