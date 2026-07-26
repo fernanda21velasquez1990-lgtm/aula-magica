@@ -13,6 +13,7 @@ const opciones = [
   ["Reuniones","Guardar reuniones y acuerdos.","🤝","/dashboard/reuniones"],
   ["Agenda","Organizar eventos y recordatorios.","📅","/dashboard/agenda"],
   ["Telegram","Conectar el bot y consultar información.","✈️","/dashboard/telegram"],
+  ["Reportes","Consultar resúmenes, imprimir y exportar datos.","📊","/dashboard/reportes"],
 ] as const;
 
 export default function DashboardPage() {
