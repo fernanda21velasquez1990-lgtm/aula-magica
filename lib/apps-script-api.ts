@@ -367,3 +367,47 @@ export async function eliminarReunion(token: string, idReunion: string) {
     data: { idReunion },
   });
 }
+
+export type EventoAgenda = {
+  idEvento: string;
+  titulo: string;
+  tipo: string;
+  fecha: string;
+  hora: string;
+  descripcion: string;
+  estado: string;
+  fechaRegistro: string;
+};
+
+export type DatosEventoAgenda = {
+  idEvento?: string;
+  titulo: string;
+  tipo: string;
+  fecha: string;
+  hora: string;
+  descripcion: string;
+  estado: string;
+};
+
+export async function listarAgenda(token: string) {
+  return llamarAppsScript<EventoAgenda[]>({ action: "listarAgenda", token });
+}
+
+export async function guardarEventoAgenda(
+  token: string,
+  datos: DatosEventoAgenda
+) {
+  return llamarAppsScript<EventoAgenda>({
+    action: "guardarEventoAgenda",
+    token,
+    data: datos,
+  });
+}
+
+export async function eliminarEventoAgenda(token: string, idEvento: string) {
+  return llamarAppsScript<{ eliminado: boolean; idEvento: string }>({
+    action: "eliminarEventoAgenda",
+    token,
+    data: { idEvento },
+  });
+}

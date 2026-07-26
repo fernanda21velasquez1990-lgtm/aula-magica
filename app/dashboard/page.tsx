@@ -11,6 +11,7 @@ const opciones = [
   ["Planificación","Organizar clases y actividades.","📚","/dashboard/planificacion"],
   ["Cumpleaños","Consultar próximos cumpleaños.","🎂","/dashboard/cumpleanos"],
   ["Reuniones","Guardar reuniones y acuerdos.","🤝","/dashboard/reuniones"],
+  ["Agenda","Organizar eventos y recordatorios.","📅","/dashboard/agenda"],
 ] as const;
 
 export default function DashboardPage() {
