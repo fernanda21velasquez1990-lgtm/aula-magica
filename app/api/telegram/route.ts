@@ -43,6 +43,21 @@ type BotResult = {
   cancelado?: boolean;
   tieneFecha?: boolean;
   eliminado?: boolean;
+  alumno?: {
+    idAlumno: string;
+    nombre: string;
+    apellido: string;
+    documento?: string;
+    fechaNacimiento?: string;
+    sexo?: string;
+    grado?: string;
+    seccion?: string;
+    representante?: string;
+    telefono?: string;
+    direccion?: string;
+    observaciones?: string;
+    estado: string;
+  };
   calificaciones?: Array<{
     idCalificacion: string;
     idAlumno: string;
@@ -517,6 +532,7 @@ function studentsMenuKeyboard() {
         { text: "📋 Ver resumen", callback_data: "alumnos" },
         { text: "➕ Registrar alumno", callback_data: "student_create" },
       ],
+      [{ text: "⚙️ Administrar alumnos", callback_data: "student_manage" }],
       [{ text: "⬅️ Volver al menú", callback_data: "inicio" }],
     ],
   };
@@ -1008,6 +1024,110 @@ function gradeDeleteConfirmKeyboard(gradeId: string) {
   };
 }
 
+
+function studentsManageListKeyboard(
+  students: Array<{
+    idAlumno: string;
+    nombre: string;
+    grado?: string;
+    seccion?: string;
+    estado: string;
+  }>
+) {
+  const rows = students.slice(0, 30).map((student) => [
+    {
+      text:
+        `👩‍🎓 ${student.nombre}` +
+        `${student.grado ? ` · ${student.grado}` : ""}`,
+      callback_data: `student_item:${student.idAlumno}`,
+    },
+  ]);
+
+  rows.push([{ text: "⬅️ Volver", callback_data: "students_menu" }]);
+  return { inline_keyboard: rows };
+}
+
+function studentItemManageKeyboard(studentId: string, state: string) {
+  const rows: Array<Array<{ text: string; callback_data: string }>> = [
+    [
+      {
+        text: "✏️ Editar datos",
+        callback_data: `student_edit:${studentId}`,
+      },
+    ],
+  ];
+
+  if (state !== "INACTIVO") {
+    rows.push([
+      {
+        text: "⏸️ Marcar inactivo",
+        callback_data: `student_state:${studentId}:INACTIVO`,
+      },
+    ]);
+  }
+
+  if (state !== "ACTIVO") {
+    rows.push([
+      {
+        text: "▶️ Marcar activo",
+        callback_data: `student_state:${studentId}:ACTIVO`,
+      },
+    ]);
+  }
+
+  rows.push([
+    {
+      text: "🗑️ Eliminar",
+      callback_data: `student_delete_confirm:${studentId}`,
+    },
+  ]);
+
+  rows.push([{ text: "⬅️ Volver", callback_data: "student_manage" }]);
+  return { inline_keyboard: rows };
+}
+
+function studentEditKeyboard(step?: string) {
+  if (step === "CONFIRMAR") {
+    return {
+      inline_keyboard: [
+        [
+          {
+            text: "✅ Guardar cambios",
+            callback_data: "student_edit_confirm",
+          },
+          {
+            text: "❌ Cancelar",
+            callback_data: "student_edit_cancel",
+          },
+        ],
+      ],
+    };
+  }
+
+  return {
+    inline_keyboard: [
+      [{ text: "❌ Cancelar", callback_data: "student_edit_cancel" }],
+    ],
+  };
+}
+
+function studentDeleteConfirmKeyboard(studentId: string) {
+  return {
+    inline_keyboard: [
+      [
+        {
+          text: "Sí, eliminar",
+          callback_data: `student_delete:${studentId}`,
+        },
+        {
+          text: "No",
+          callback_data: `student_item:${studentId}`,
+        },
+      ],
+    ],
+  };
+}
+
 function mainMenuKeyboard(linked = true) {
   const rows: InlineButton[][] = linked
     ? [
@@ -1311,6 +1431,166 @@ async function handleUpdate(update: TelegramUpdate) {
       );
       return;
     }
+  }
+
+  if (command === "student_manage") {
+    const result = await callAppsScript<BotResult>(
+      "botListarAlumnosGestionTelegram",
+      { chatId }
+    );
+
+    const students = result.alumnos || [];
+
+    if (!students.length) {
+      await sendMessage(
+        chatId,
+        "No tienes alumnos para administrar.",
+        true,
+        studentsMenuKeyboard()
+      );
+      return;
+    }
+
+    await sendMessage(
+      chatId,
+      "⚙️ <b>Administrar alumnos</b>\n\nSelecciona un alumno.",
+      true,
+      studentsManageListKeyboard(students)
+    );
+    return;
+  }
+
+  if (command.startsWith("student_item:")) {
+    const studentId = rawText.split(":")[1] || "";
+
+    const result = await callAppsScript<BotResult>(
+      "botObtenerAlumnoGestionTelegram",
+      { chatId, idAlumno: studentId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Alumno"),
+      true,
+      studentItemManageKeyboard(
+        studentId,
+        result.alumno?.estado || "ACTIVO"
+      )
+    );
+    return;
+  }
+
+  if (command.startsWith("student_edit:")) {
+    const studentId = rawText.split(":")[1] || "";
+
+    const result = await callAppsScript<BotResult>(
+      "botIniciarEdicionAlumnoTelegram",
+      { chatId, idAlumno: studentId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Escribe el nuevo nombre."),
+      true,
+      studentEditKeyboard(result.paso)
+    );
+    return;
+  }
+
+  if (command === "student_edit_confirm") {
+    const result = await callAppsScript<BotResult>(
+      "botConfirmarEdicionAlumnoTelegram",
+      { chatId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Alumno actualizado."),
+      true,
+      studentsMenuKeyboard()
+    );
+    return;
+  }
+
+  if (command === "student_edit_cancel") {
+    const result = await callAppsScript<BotResult>(
+      "botCancelarEdicionAlumnoTelegram",
+      { chatId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Operación cancelada."),
+      true
+    );
+    return;
+  }
+
+  if (!callback && !rawText.startsWith("/")) {
+    const studentEditFlow = await callAppsScript<BotResult>(
+      "botProcesarEdicionAlumnoTelegram",
+      { chatId, texto: rawText }
+    );
+
+    if (studentEditFlow.activo || studentEditFlow.cancelado) {
+      await sendMessage(
+        chatId,
+        escapeHtml(
+          studentEditFlow.texto || "Continúa con el siguiente paso."
+        ),
+        true,
+        studentEditFlow.activo
+          ? studentEditKeyboard(studentEditFlow.paso)
+          : mainMenuKeyboard(true)
+      );
+      return;
+    }
+  }
+
+  if (command.startsWith("student_state:")) {
+    const [, studentId = "", state = ""] = rawText.split(":");
+
+    const result = await callAppsScript<BotResult>(
+      "botCambiarEstadoAlumnoTelegram",
+      { chatId, idAlumno: studentId, estado: state }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Alumno actualizado."),
+      true,
+      studentsMenuKeyboard()
+    );
+    return;
+  }
+
+  if (command.startsWith("student_delete_confirm:")) {
+    const studentId = rawText.split(":")[1] || "";
+
+    await sendMessage(
+      chatId,
+      "⚠️ ¿Seguro que deseas eliminar este alumno?",
+      true,
+      studentDeleteConfirmKeyboard(studentId)
+    );
+    return;
+  }
+
+  if (command.startsWith("student_delete:")) {
+    const studentId = rawText.split(":")[1] || "";
+
+    const result = await callAppsScript<BotResult>(
+      "botEliminarAlumnoTelegram",
+      { chatId, idAlumno: studentId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Alumno eliminado."),
+      true,
+      studentsMenuKeyboard()
+    );
+    return;
   }
 
   if (command === "students_menu") {
