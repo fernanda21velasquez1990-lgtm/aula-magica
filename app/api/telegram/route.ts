@@ -43,6 +43,32 @@ type BotResult = {
   cancelado?: boolean;
   tieneFecha?: boolean;
   eliminado?: boolean;
+  planes?: Array<{
+    idPlanificacion: string;
+    titulo: string;
+    asignatura: string;
+    grado: string;
+    fecha: string;
+    objetivo?: string;
+    contenido?: string;
+    actividades?: string;
+    recursos?: string;
+    evaluacion?: string;
+    estado: string;
+  }>;
+  plan?: {
+    idPlanificacion: string;
+    titulo: string;
+    asignatura: string;
+    grado: string;
+    fecha: string;
+    objetivo?: string;
+    contenido?: string;
+    actividades?: string;
+    recursos?: string;
+    evaluacion?: string;
+    estado: string;
+  };
   reuniones?: Array<{
     idReunion: string;
     titulo: string;
@@ -334,6 +360,7 @@ function plansMenuKeyboard() {
         { text: "📋 Ver próximas", callback_data: "planes" },
         { text: "➕ Crear planificación", callback_data: "plan_create" },
       ],
+      [{ text: "⚙️ Administrar planes", callback_data: "plan_manage" }],
       [{ text: "⬅️ Volver al menú", callback_data: "inicio" }],
     ],
   };
@@ -786,6 +813,84 @@ function meetingDeleteConfirmKeyboard(meetingId: string) {
         {
           text: "No",
           callback_data: `meeting_item:${meetingId}`,
+        },
+      ],
+    ],
+  };
+}
+
+
+function plansManageListKeyboard(
+  plans: Array<{
+    idPlanificacion: string;
+    titulo: string;
+    fecha: string;
+    estado: string;
+  }>
+) {
+  const rows = plans.slice(0, 20).map((plan) => [
+    {
+      text: `📚 ${plan.fecha} · ${plan.titulo}`,
+      callback_data: `plan_item:${plan.idPlanificacion}`,
+    },
+  ]);
+
+  rows.push([{ text: "⬅️ Volver", callback_data: "plans_menu" }]);
+  return { inline_keyboard: rows };
+}
+
+function planItemKeyboard(planId: string, state: string) {
+  const rows: Array<Array<{ text: string; callback_data: string }>> = [];
+
+  if (state !== "COMPLETADA") {
+    rows.push([
+      {
+        text: "✅ Marcar completada",
+        callback_data: `plan_state:${planId}:COMPLETADA`,
+      },
+    ]);
+  }
+
+  if (state !== "PLANIFICADA") {
+    rows.push([
+      {
+        text: "📅 Marcar planificada",
+        callback_data: `plan_state:${planId}:PLANIFICADA`,
+      },
+    ]);
+  }
+
+  if (state !== "BORRADOR") {
+    rows.push([
+      {
+        text: "📝 Marcar borrador",
+        callback_data: `plan_state:${planId}:BORRADOR`,
+      },
+    ]);
+  }
+
+  rows.push([
+    {
+      text: "🗑️ Eliminar",
+      callback_data: `plan_delete_confirm:${planId}`,
+    },
+  ]);
+
+  rows.push([{ text: "⬅️ Volver", callback_data: "plan_manage" }]);
+  return { inline_keyboard: rows };
+}
+
+function planDeleteConfirmKeyboard(planId: string) {
+  return {
+    inline_keyboard: [
+      [
+        {
+          text: "Sí, eliminar",
+          callback_data: `plan_delete:${planId}`,
+        },
+        {
+          text: "No",
+          callback_data: `plan_item:${planId}`,
         },
       ],
     ],
@@ -1316,6 +1421,99 @@ async function handleUpdate(update: TelegramUpdate) {
       );
       return;
     }
+  }
+
+  if (command === "plan_manage") {
+    const result = await callAppsScript<BotResult>(
+      "botListarPlanesGestionTelegram",
+      { chatId }
+    );
+
+    const plans = result.planes || [];
+
+    if (!plans.length) {
+      await sendMessage(
+        chatId,
+        "No tienes planificaciones para administrar.",
+        true,
+        plansMenuKeyboard()
+      );
+      return;
+    }
+
+    await sendMessage(
+      chatId,
+      "⚙️ <b>Administrar planificaciones</b>\n\nSelecciona una planificación.",
+      true,
+      plansManageListKeyboard(plans)
+    );
+    return;
+  }
+
+  if (command.startsWith("plan_item:")) {
+    const planId = rawText.split(":")[1] || "";
+
+    const result = await callAppsScript<BotResult>(
+      "botObtenerPlanGestionTelegram",
+      { chatId, idPlanificacion: planId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Planificación"),
+      true,
+      planItemKeyboard(
+        planId,
+        result.plan?.estado || "PLANIFICADA"
+      )
+    );
+    return;
+  }
+
+  if (command.startsWith("plan_state:")) {
+    const [, planId = "", state = ""] = rawText.split(":");
+
+    const result = await callAppsScript<BotResult>(
+      "botCambiarEstadoPlanTelegram",
+      { chatId, idPlanificacion: planId, estado: state }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Planificación actualizada."),
+      true,
+      plansMenuKeyboard()
+    );
+    return;
+  }
+
+  if (command.startsWith("plan_delete_confirm:")) {
+    const planId = rawText.split(":")[1] || "";
+
+    await sendMessage(
+      chatId,
+      "⚠️ ¿Seguro que deseas eliminar esta planificación?",
+      true,
+      planDeleteConfirmKeyboard(planId)
+    );
+    return;
+  }
+
+  if (command.startsWith("plan_delete:")) {
+    const planId = rawText.split(":")[1] || "";
+
+    const result = await callAppsScript<BotResult>(
+      "botEliminarPlanTelegram",
+      { chatId, idPlanificacion: planId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Planificación eliminada."),
+      true,
+      plansMenuKeyboard()
+    );
+    return;
   }
 
   if (command === "plans_menu") {
