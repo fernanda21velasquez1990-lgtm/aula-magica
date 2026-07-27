@@ -43,6 +43,15 @@ type BotResult = {
   cancelado?: boolean;
   tieneFecha?: boolean;
   eliminado?: boolean;
+  perfil?: {
+    idMaestra: string;
+    nombre: string;
+    apellido: string;
+    correo: string;
+    usuario: string;
+    grado?: string;
+    seccion?: string;
+  };
 };
 
 const BOT_API = "https://api.telegram.org";
@@ -547,6 +556,44 @@ function reportsMenuKeyboard() {
   };
 }
 
+
+function settingsMenuKeyboard() {
+  return {
+    inline_keyboard: [
+      [
+        { text: "👤 Ver perfil", callback_data: "settings_view" },
+        { text: "✏️ Editar perfil", callback_data: "settings_edit" },
+      ],
+      [{ text: "⬅️ Volver al menú", callback_data: "inicio" }],
+    ],
+  };
+}
+
+function settingsCancelKeyboard() {
+  return {
+    inline_keyboard: [
+      [{ text: "❌ Cancelar", callback_data: "settings_cancel" }],
+    ],
+  };
+}
+
+function settingsConfirmKeyboard() {
+  return {
+    inline_keyboard: [
+      [
+        { text: "✅ Guardar cambios", callback_data: "settings_confirm" },
+        { text: "❌ Cancelar", callback_data: "settings_cancel" },
+      ],
+    ],
+  };
+}
+
+function keyboardForSettingsStep(step?: string) {
+  return step === "CONFIRMAR"
+    ? settingsConfirmKeyboard()
+    : settingsCancelKeyboard();
+}
+
 function mainMenuKeyboard(linked = true) {
   const rows: InlineButton[][] = linked
     ? [
@@ -567,6 +614,7 @@ function mainMenuKeyboard(linked = true) {
           { text: "📅 Agenda", callback_data: "agenda_menu" },
         ],
         [{ text: "📊 Reportes", callback_data: "reports_menu" }],
+      [{ text: "⚙️ Configuración", callback_data: "settings_menu" }],
       [{ text: "❓ Ayuda", callback_data: "ayuda" }],
       ]
     : [[{ text: "❓ Cómo vincular", callback_data: "ayuda_vincular" }]];
@@ -625,6 +673,94 @@ async function handleUpdate(update: TelegramUpdate) {
   await answerCallback(callback?.id);
 
   const { command, argument } = commandFromText(rawText);
+
+  if (command === "settings_menu") {
+    await sendMessage(
+      chatId,
+      "⚙️ <b>Configuración</b>\n\nConsulta o actualiza el perfil de la maestra.",
+      true,
+      settingsMenuKeyboard()
+    );
+    return;
+  }
+
+  if (command === "settings_view") {
+    const result = await callAppsScript<BotResult>(
+      "botObtenerPerfilTelegram",
+      { chatId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "No hay información disponible."),
+      true,
+      settingsMenuKeyboard()
+    );
+    return;
+  }
+
+  if (command === "settings_edit") {
+    const result = await callAppsScript<BotResult>(
+      "botIniciarPerfilTelegram",
+      { chatId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Escribe el nuevo nombre."),
+      true,
+      keyboardForSettingsStep(result.paso)
+    );
+    return;
+  }
+
+  if (command === "settings_confirm") {
+    const result = await callAppsScript<BotResult>(
+      "botConfirmarPerfilTelegram",
+      { chatId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Perfil actualizado."),
+      true,
+      settingsMenuKeyboard()
+    );
+    return;
+  }
+
+  if (command === "settings_cancel") {
+    const result = await callAppsScript<BotResult>(
+      "botCancelarFlujoPerfilTelegram",
+      { chatId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Operación cancelada."),
+      true
+    );
+    return;
+  }
+
+  if (!callback && !rawText.startsWith("/")) {
+    const settingsFlow = await callAppsScript<BotResult>(
+      "botProcesarFlujoPerfilTelegram",
+      { chatId, texto: rawText }
+    );
+
+    if (settingsFlow.activo || settingsFlow.cancelado) {
+      await sendMessage(
+        chatId,
+        escapeHtml(settingsFlow.texto || "Continúa con el siguiente paso."),
+        true,
+        settingsFlow.activo
+          ? keyboardForSettingsStep(settingsFlow.paso)
+          : mainMenuKeyboard(true)
+      );
+      return;
+    }
+  }
 
   if (command === "reports_menu") {
     await sendMessage(

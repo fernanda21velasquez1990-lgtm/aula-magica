@@ -1,10 +1,11 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   actualizarPerfilMaestra,
   cambiarContrasenaMaestra,
+  verificarSesion,
   type Maestra,
 } from "@/lib/apps-script-api";
 import {
@@ -22,23 +23,94 @@ export default function ConfiguracionPage() {
   const [guardandoPerfil, setGuardandoPerfil] = useState(false);
   const [guardandoClave, setGuardandoClave] = useState(false);
   const [mensaje, setMensaje] = useState("");
+  const [ultimaActualizacion, setUltimaActualizacion] = useState<Date | null>(null);
+  const [mostrarSincronizacion, setMostrarSincronizacion] = useState(false);
+  const temporizadorRef = useRef<number | null>(null);
+  const editandoRef = useRef(false);
 
   useEffect(() => {
+    return () => {
+      if (temporizadorRef.current !== null) {
+        window.clearTimeout(temporizadorRef.current);
+      }
+    };
+  }, []);
+
+  const cargarPerfil = useCallback(async (silencioso = false) => {
     const token = obtenerToken();
     const actual = obtenerMaestra();
+
     if (!token || !actual) {
       eliminarSesion();
       router.replace("/");
       return;
     }
-    setMaestra(actual);
-    setPerfil({
-      nombre: actual.nombre || "",
-      apellido: actual.apellido || "",
-      grado: actual.grado || "",
-      seccion: actual.seccion || "",
-    });
+
+    try {
+      const actualizado = await verificarSesion(token);
+      guardarSesion(token, actualizado);
+      setMaestra(actualizado);
+
+      if (!editandoRef.current) {
+        setPerfil({
+          nombre: actualizado.nombre || "",
+          apellido: actualizado.apellido || "",
+          grado: actualizado.grado || "",
+          seccion: actualizado.seccion || "",
+        });
+      }
+
+      setUltimaActualizacion(new Date());
+
+      if (!silencioso) {
+        setMostrarSincronizacion(true);
+
+        if (temporizadorRef.current !== null) {
+          window.clearTimeout(temporizadorRef.current);
+        }
+
+        temporizadorRef.current = window.setTimeout(() => {
+          setMostrarSincronizacion(false);
+          temporizadorRef.current = null;
+        }, 3000);
+      }
+    } catch (error) {
+      if (!silencioso) {
+        setMensaje(
+          error instanceof Error
+            ? error.message
+            : "No se pudo actualizar el perfil."
+        );
+      }
+    }
   }, [router]);
+
+  useEffect(() => {
+    void cargarPerfil();
+  }, [cargarPerfil]);
+
+  useEffect(() => {
+    const actualizar = () => {
+      if (
+        document.visibilityState === "visible" &&
+        !editandoRef.current &&
+        !guardandoPerfil &&
+        !guardandoClave
+      ) {
+        void cargarPerfil(true);
+      }
+    };
+
+    const intervalo = window.setInterval(actualizar, 10_000);
+    window.addEventListener("focus", actualizar);
+    document.addEventListener("visibilitychange", actualizar);
+
+    return () => {
+      window.clearInterval(intervalo);
+      window.removeEventListener("focus", actualizar);
+      document.removeEventListener("visibilitychange", actualizar);
+    };
+  }, [cargarPerfil, guardandoPerfil, guardandoClave]);
 
   async function guardarPerfilForm(event: FormEvent) {
     event.preventDefault();
@@ -50,6 +122,7 @@ export default function ConfiguracionPage() {
       const actualizada = await actualizarPerfilMaestra(token, perfil);
       guardarSesion(token, actualizada);
       setMaestra(actualizada);
+      editandoRef.current = false;
       setMensaje("Perfil actualizado correctamente.");
     } catch (error) {
       setMensaje(error instanceof Error ? error.message : "No se pudo actualizar el perfil.");
@@ -93,6 +166,17 @@ export default function ConfiguracionPage() {
         <div className="settings-avatar">👩‍🏫</div>
       </section>
 
+      {mostrarSincronizacion && ultimaActualizacion && !mensaje && (
+        <div className="settings-message" role="status" aria-live="polite">
+          ✅ Perfil actualizado a las{" "}
+          {ultimaActualizacion.toLocaleTimeString("es-ES", {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          })}
+        </div>
+      )}
+
       {mensaje && <div className="settings-message">{mensaje}</div>}
 
       <section className="settings-grid">
@@ -104,10 +188,10 @@ export default function ConfiguracionPage() {
             <div><span>Usuario</span><strong>{maestra?.usuario || "—"}</strong></div>
           </div>
           <form className="settings-form" onSubmit={guardarPerfilForm}>
-            <label>Nombre<input required value={perfil.nombre} onChange={(e)=>setPerfil({...perfil,nombre:e.target.value})}/></label>
-            <label>Apellido<input required value={perfil.apellido} onChange={(e)=>setPerfil({...perfil,apellido:e.target.value})}/></label>
-            <label>Grado<input value={perfil.grado} onChange={(e)=>setPerfil({...perfil,grado:e.target.value})}/></label>
-            <label>Sección<input value={perfil.seccion} onChange={(e)=>setPerfil({...perfil,seccion:e.target.value})}/></label>
+            <label>Nombre<input required value={perfil.nombre} onChange={(e)=>{ editandoRef.current = true; setPerfil({...perfil,nombre:e.target.value}); }}/></label>
+            <label>Apellido<input required value={perfil.apellido} onChange={(e)=>{ editandoRef.current = true; setPerfil({...perfil,apellido:e.target.value}); }}/></label>
+            <label>Grado<input value={perfil.grado} onChange={(e)=>{ editandoRef.current = true; setPerfil({...perfil,grado:e.target.value}); }}/></label>
+            <label>Sección<input value={perfil.seccion} onChange={(e)=>{ editandoRef.current = true; setPerfil({...perfil,seccion:e.target.value}); }}/></label>
             <button className="settings-primary" disabled={guardandoPerfil}>{guardandoPerfil ? "Guardando..." : "Guardar perfil"}</button>
           </form>
         </article>
