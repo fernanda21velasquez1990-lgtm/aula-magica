@@ -39,6 +39,11 @@ const items = [
 export default function Sidebar() {
   const pathname = usePathname();
   const maestra = obtenerMaestra();
+  const correoAdministrador = "wilmarvelasquez1783@gmail.com";
+  const esAdministrador =
+    Boolean(maestra?.esAdmin) ||
+    String(maestra?.correo || "").trim().toLowerCase() ===
+      correoAdministrador;
 
   return (
     <aside className="sidebar">
@@ -66,7 +71,7 @@ export default function Sidebar() {
             </Link>
           );
         })}
-        {maestra?.esAdmin && (
+        {esAdministrador && (
           <Link
             href="/dashboard/admin"
             className={

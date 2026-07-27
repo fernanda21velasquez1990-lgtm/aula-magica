@@ -160,6 +160,59 @@ export default function LoginPage() {
           >
             {register ? "Ya tengo una cuenta" : "Soy nueva, crear cuenta"}
           </button>
+
+          {!register && (
+            <section
+              className="login-benefits"
+              aria-label="Funciones de Aula Mágica"
+            >
+              <div className="login-benefits-heading">
+                <span>✨</span>
+                <div>
+                  <strong>Todo organizado para tu jornada docente</strong>
+                  <small>Continúa justo donde lo dejaste.</small>
+                </div>
+              </div>
+
+              <div className="login-benefits-grid">
+                <article>
+                  <span>👩‍🎓</span>
+                  <div>
+                    <strong>Alumnos y asistencia</strong>
+                    <small>Control diario en pocos pasos.</small>
+                  </div>
+                </article>
+
+                <article>
+                  <span>📝</span>
+                  <div>
+                    <strong>Notas y planificación</strong>
+                    <small>Registros claros y disponibles.</small>
+                  </div>
+                </article>
+
+                <article>
+                  <span>📅</span>
+                  <div>
+                    <strong>Agenda y reuniones</strong>
+                    <small>Organiza tus actividades escolares.</small>
+                  </div>
+                </article>
+
+                <article>
+                  <span>🧰</span>
+                  <div>
+                    <strong>Mi Baúl Digital</strong>
+                    <small>Materiales y recursos en un solo lugar.</small>
+                  </div>
+                </article>
+              </div>
+
+              <div className="login-benefits-footer">
+                🔐 Acceso protegido · 📱 Funciona en celular · ☁️ Datos sincronizados
+              </div>
+            </section>
+          )}
         </div>
       </section>
     </main>

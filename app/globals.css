@@ -315,3 +315,24 @@ img{max-width:100%}
 [data-theme="dark"] .admin-pro-card,[data-theme="dark"] .admin-pro-kpis article,[data-theme="dark"] .admin-pro-tabs{background:#251e2d!important;color:#f4edf6!important;border-color:#43364b!important}[data-theme="dark"] .admin-pro-table th,[data-theme="dark"] .admin-pro-activity-list div,[data-theme="dark"] .admin-pro-audit-list article{background:#312738!important}[data-theme="dark"] .admin-pro-table td{border-color:#43364b!important}
 @media(max-width:1050px){.admin-pro-kpis{grid-template-columns:repeat(2,1fr)}.admin-pro-dashboard-grid{grid-template-columns:1fr}}
 @media(max-width:680px){.admin-pro-page{padding:3px 0 95px}.admin-pro-hero{align-items:flex-start;flex-direction:column;padding:23px}.admin-pro-hero button{width:100%}.admin-pro-kpis{grid-template-columns:1fr 1fr}.admin-pro-form-grid{grid-template-columns:1fr}.admin-pro-form-grid .wide{grid-column:auto}.admin-pro-audit-list article{grid-template-columns:1fr}.admin-pro-audit-list time{text-align:left}}
+
+
+/* Aula Mágica v8.0.1 - administrador visible y login completo */
+.login-benefits{margin-top:18px;padding:18px;border:1px solid rgba(231,216,226,.95);border-radius:20px;background:linear-gradient(145deg,#fff9fc,#f7f4ff);box-shadow:0 12px 30px rgba(69,48,83,.08)}
+.login-benefits-heading{display:flex;align-items:center;gap:11px;margin-bottom:14px}
+.login-benefits-heading>span{display:grid;place-items:center;width:42px;height:42px;border-radius:14px;background:#ffe2ef;font-size:22px}
+.login-benefits-heading strong,.login-benefits-heading small{display:block}
+.login-benefits-heading strong{color:#3a3042;font-size:15px}
+.login-benefits-heading small{margin-top:3px;color:#7e7383;font-size:12px}
+.login-benefits-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.login-benefits-grid article{display:flex;align-items:flex-start;gap:10px;padding:12px;border-radius:15px;background:#fff;border:1px solid #eee3ea}
+.login-benefits-grid article>span{font-size:22px}
+.login-benefits-grid strong,.login-benefits-grid small{display:block}
+.login-benefits-grid strong{font-size:12px;color:#4a3d52}
+.login-benefits-grid small{margin-top:3px;color:#847987;font-size:11px;line-height:1.35}
+.login-benefits-footer{margin-top:12px;padding-top:11px;border-top:1px solid #eadfe7;color:#756a7a;font-size:11px;font-weight:750;text-align:center}
+[data-theme="dark"] .login-benefits{background:linear-gradient(145deg,#2d2434,#231c2b);border-color:#4b3c54}
+[data-theme="dark"] .login-benefits-grid article{background:#342a3d;border-color:#4a3b53}
+[data-theme="dark"] .login-benefits-heading strong,[data-theme="dark"] .login-benefits-grid strong{color:#f5edf7}
+[data-theme="dark"] .login-benefits-heading small,[data-theme="dark"] .login-benefits-grid small,[data-theme="dark"] .login-benefits-footer{color:#c5b8cb}
+@media(max-width:760px){.login-benefits-grid{grid-template-columns:1fr}.login-benefits{padding:15px}}
