@@ -829,7 +829,14 @@ function meetingsManageListKeyboard(
 }
 
 function meetingItemKeyboard(meetingId: string, state: string) {
-  const rows: Array<Array<{ text: string; callback_data: string }>> = [];
+  const rows: Array<Array<{ text: string; callback_data: string }>> = [
+    [
+      {
+        text: "✏️ Editar reunión",
+        callback_data: `meeting_edit:${meetingId}`,
+      },
+    ],
+  ];
 
   if (state !== "REALIZADA") {
     rows.push([
@@ -1244,6 +1251,32 @@ function agendaEditKeyboard(step?: string) {
   return {
     inline_keyboard: [
       [{ text: "❌ Cancelar", callback_data: "agenda_edit_cancel" }],
+    ],
+  };
+}
+
+
+function meetingEditKeyboard(step?: string) {
+  if (step === "CONFIRMAR") {
+    return {
+      inline_keyboard: [
+        [
+          {
+            text: "✅ Guardar cambios",
+            callback_data: "meeting_edit_confirm",
+          },
+          {
+            text: "❌ Cancelar",
+            callback_data: "meeting_edit_cancel",
+          },
+        ],
+      ],
+    };
+  }
+
+  return {
+    inline_keyboard: [
+      [{ text: "❌ Cancelar", callback_data: "meeting_edit_cancel" }],
     ],
   };
 }
@@ -2284,6 +2317,73 @@ async function handleUpdate(update: TelegramUpdate) {
       )
     );
     return;
+  }
+
+  if (command.startsWith("meeting_edit:")) {
+    const meetingId = rawText.split(":")[1] || "";
+
+    const result = await callAppsScript<BotResult>(
+      "botIniciarEdicionReunionTelegram",
+      { chatId, idReunion: meetingId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Escribe el nuevo título."),
+      true,
+      meetingEditKeyboard(result.paso)
+    );
+    return;
+  }
+
+  if (command === "meeting_edit_confirm") {
+    const result = await callAppsScript<BotResult>(
+      "botConfirmarEdicionReunionTelegram",
+      { chatId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Reunión actualizada."),
+      true,
+      meetingsMenuKeyboard()
+    );
+    return;
+  }
+
+  if (command === "meeting_edit_cancel") {
+    const result = await callAppsScript<BotResult>(
+      "botCancelarEdicionReunionTelegram",
+      { chatId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Operación cancelada."),
+      true
+    );
+    return;
+  }
+
+  if (!callback && !rawText.startsWith("/")) {
+    const meetingEditFlow = await callAppsScript<BotResult>(
+      "botProcesarEdicionReunionTelegram",
+      { chatId, texto: rawText }
+    );
+
+    if (meetingEditFlow.activo || meetingEditFlow.cancelado) {
+      await sendMessage(
+        chatId,
+        escapeHtml(
+          meetingEditFlow.texto || "Continúa con el siguiente paso."
+        ),
+        true,
+        meetingEditFlow.activo
+          ? meetingEditKeyboard(meetingEditFlow.paso)
+          : mainMenuKeyboard(true)
+      );
+      return;
+    }
   }
 
   if (command.startsWith("meeting_state:")) {
