@@ -37,6 +37,10 @@ type BotResult = {
     grado?: string;
     seccion?: string;
   }>;
+  activo?: boolean;
+  paso?: string;
+  guardado?: boolean;
+  cancelado?: boolean;
 };
 
 const BOT_API = "https://api.telegram.org";
@@ -179,6 +183,61 @@ function attendanceStateKeyboard(studentId: string) {
   };
 }
 
+
+function agendaMenuKeyboard() {
+  return {
+    inline_keyboard: [
+      [
+        { text: "📋 Ver próximos", callback_data: "agenda" },
+        { text: "➕ Crear evento", callback_data: "agenda_create" },
+      ],
+      [{ text: "⬅️ Volver al menú", callback_data: "inicio" }],
+    ],
+  };
+}
+
+function agendaCancelKeyboard() {
+  return {
+    inline_keyboard: [
+      [{ text: "❌ Cancelar", callback_data: "agenda_cancel" }],
+    ],
+  };
+}
+
+function agendaTypeKeyboard() {
+  return {
+    inline_keyboard: [
+      [
+        { text: "📚 Clase", callback_data: "agenda_type:CLASE" },
+        { text: "🎨 Actividad", callback_data: "agenda_type:ACTIVIDAD" },
+      ],
+      [
+        { text: "🔔 Recordatorio", callback_data: "agenda_type:RECORDATORIO" },
+        { text: "📦 Entrega", callback_data: "agenda_type:ENTREGA" },
+      ],
+      [{ text: "📌 Otro", callback_data: "agenda_type:OTRO" }],
+      [{ text: "❌ Cancelar", callback_data: "agenda_cancel" }],
+    ],
+  };
+}
+
+function agendaConfirmKeyboard() {
+  return {
+    inline_keyboard: [
+      [
+        { text: "✅ Guardar evento", callback_data: "agenda_confirm" },
+        { text: "❌ Cancelar", callback_data: "agenda_cancel" },
+      ],
+    ],
+  };
+}
+
+function keyboardForAgendaStep(step?: string) {
+  if (step === "TIPO") return agendaTypeKeyboard();
+  if (step === "CONFIRMAR") return agendaConfirmKeyboard();
+  return agendaCancelKeyboard();
+}
+
 function mainMenuKeyboard(linked = true) {
   const rows: InlineButton[][] = linked
     ? [
@@ -196,7 +255,7 @@ function mainMenuKeyboard(linked = true) {
         ],
         [
           { text: "🤝 Reuniones", callback_data: "reuniones" },
-          { text: "📅 Agenda", callback_data: "agenda" },
+          { text: "📅 Agenda", callback_data: "agenda_menu" },
         ],
         [{ text: "❓ Ayuda", callback_data: "ayuda" }],
       ]
@@ -256,6 +315,88 @@ async function handleUpdate(update: TelegramUpdate) {
   await answerCallback(callback?.id);
 
   const { command, argument } = commandFromText(rawText);
+
+  if (command === "agenda_menu") {
+    await sendMessage(
+      chatId,
+      "📅 <b>Agenda</b>\n\nConsulta tus próximos eventos o crea uno nuevo.",
+      true,
+      agendaMenuKeyboard()
+    );
+    return;
+  }
+
+  if (command === "agenda_create") {
+    const result = await callAppsScript<BotResult>(
+      "botIniciarAgendaTelegram",
+      { chatId }
+    );
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Escribe el título del evento."),
+      true,
+      keyboardForAgendaStep(result.paso)
+    );
+    return;
+  }
+
+  if (command.startsWith("agenda_type:")) {
+    const tipo = rawText.split(":")[1] || "";
+    const result = await callAppsScript<BotResult>(
+      "botSeleccionarTipoAgendaTelegram",
+      { chatId, tipo }
+    );
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Escribe la descripción."),
+      true,
+      keyboardForAgendaStep(result.paso)
+    );
+    return;
+  }
+
+  if (command === "agenda_confirm") {
+    const result = await callAppsScript<BotResult>(
+      "botConfirmarAgendaTelegram",
+      { chatId }
+    );
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Evento guardado."),
+      true
+    );
+    return;
+  }
+
+  if (command === "agenda_cancel" || command === "cancelar") {
+    const result = await callAppsScript<BotResult>(
+      "botCancelarFlujoAgendaTelegram",
+      { chatId }
+    );
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Operación cancelada."),
+      true
+    );
+    return;
+  }
+
+  if (!callback && !rawText.startsWith("/")) {
+    const flow = await callAppsScript<BotResult>(
+      "botProcesarFlujoAgendaTelegram",
+      { chatId, texto: rawText }
+    );
+
+    if (flow.activo || flow.cancelado) {
+      await sendMessage(
+        chatId,
+        escapeHtml(flow.texto || "Continúa con el siguiente paso."),
+        true,
+        flow.activo ? keyboardForAgendaStep(flow.paso) : mainMenuKeyboard(true)
+      );
+      return;
+    }
+  }
 
   if (command === "att_manage") {
     await sendMessage(

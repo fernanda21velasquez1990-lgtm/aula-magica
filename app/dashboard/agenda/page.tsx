@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   eliminarEventoAgenda,
@@ -67,12 +67,19 @@ export default function AgendaPage() {
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState("");
+  const [ultimaActualizacion, setUltimaActualizacion] = useState<Date | null>(null);
+  const formularioRef = useRef(false);
+  const guardandoRef = useRef(false);
 
   useEffect(() => {
-    cargarAgenda();
-  }, []);
+    formularioRef.current = mostrarFormulario;
+  }, [mostrarFormulario]);
 
-  async function cargarAgenda() {
+  useEffect(() => {
+    guardandoRef.current = guardando;
+  }, [guardando]);
+
+  const cargarAgenda = useCallback(async (silencioso = false) => {
     const token = obtenerToken();
     if (!token) {
       eliminarSesion();
@@ -80,15 +87,44 @@ export default function AgendaPage() {
       return;
     }
 
-    setCargando(true);
+    if (!silencioso) setCargando(true);
     try {
       setEventos(await listarAgenda(token));
+      setUltimaActualizacion(new Date());
     } catch (error) {
-      setMensaje(error instanceof Error ? error.message : "No se pudo cargar la agenda.");
+      if (!silencioso) {
+        setMensaje(error instanceof Error ? error.message : "No se pudo cargar la agenda.");
+      }
     } finally {
-      setCargando(false);
+      if (!silencioso) setCargando(false);
     }
-  }
+  }, [router]);
+
+  useEffect(() => {
+    void cargarAgenda();
+  }, [cargarAgenda]);
+
+  useEffect(() => {
+    const actualizar = () => {
+      if (
+        document.visibilityState === "visible" &&
+        !formularioRef.current &&
+        !guardandoRef.current
+      ) {
+        void cargarAgenda(true);
+      }
+    };
+
+    const intervalo = window.setInterval(actualizar, 10_000);
+    window.addEventListener("focus", actualizar);
+    document.addEventListener("visibilitychange", actualizar);
+
+    return () => {
+      window.clearInterval(intervalo);
+      window.removeEventListener("focus", actualizar);
+      document.removeEventListener("visibilitychange", actualizar);
+    };
+  }, [cargarAgenda]);
 
   function abrirNuevo() {
     setFormulario({ ...formularioInicial, fecha: hoyTexto() });
@@ -196,9 +232,19 @@ export default function AgendaPage() {
           <h1>Agenda 📅</h1>
           <p>Registra clases, actividades, entregas y recordatorios importantes.</p>
         </div>
-        <button type="button" className="agenda-primary-button" onClick={abrirNuevo}>
-          + Nuevo evento
-        </button>
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            className="agenda-primary-button"
+            onClick={() => void cargarAgenda()}
+            disabled={cargando || guardando}
+          >
+            🔄 Actualizar
+          </button>
+          <button type="button" className="agenda-primary-button" onClick={abrirNuevo}>
+            + Nuevo evento
+          </button>
+        </div>
       </section>
 
       <section className="agenda-summary">
@@ -224,6 +270,18 @@ export default function AgendaPage() {
           {ESTADOS.map((opcion) => <option key={opcion} value={opcion}>{opcion}</option>)}
         </select>
       </section>
+
+      {ultimaActualizacion && !mensaje && (
+        <div className="agenda-message">
+          🔄 Sincronizado con Google Sheets a las{" "}
+          {ultimaActualizacion.toLocaleTimeString("es-ES", {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          })}
+          {" · Actualización automática activa."}
+        </div>
+      )}
 
       {mensaje && <div className="agenda-message">{mensaje}</div>}
 
