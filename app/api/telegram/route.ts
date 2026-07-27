@@ -1498,14 +1498,19 @@ function mainMenuKeyboard(linked = true) {
           { text: "🤝 Reuniones", callback_data: "meetings_menu" },
           { text: "📅 Agenda", callback_data: "agenda_menu" },
         ],
-        [{ text: "📊 Reportes", callback_data: "reports_menu" }],
-      [{ text: "🧰 Mi Baúl", callback_data: "vault_menu" }],
-      [{ text: "⚙️ Configuración", callback_data: "settings_menu" }],
-      [{ text: "❓ Ayuda", callback_data: "ayuda" }],
+        [
+          { text: "📊 Reportes", callback_data: "reports_menu" },
+          { text: "🧰 Mi Baúl", callback_data: "vault_menu" },
+        ],
+        [
+          { text: "⚙️ Configuración", callback_data: "settings_menu" },
+          { text: "❓ Ayuda", callback_data: "ayuda" },
+        ],
       ]
     : [[{ text: "❓ Cómo vincular", callback_data: "ayuda_vincular" }]];
 
   const appUrl = String(process.env.AULA_MAGICA_URL || "").trim();
+
   if (appUrl) {
     rows.push([{ text: "🌐 Abrir Aula Mágica", url: appUrl }]);
   }
