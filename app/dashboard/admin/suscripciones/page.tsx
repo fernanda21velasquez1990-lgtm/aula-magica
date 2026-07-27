@@ -3,7 +3,8 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   adminActivarSuscripcion, adminCambiarEstadoSuscripcion,
-  adminObtenerSuscripciones, adminRegistrarPagoSuscripcion,
+  adminGuardarLimitesPlan, adminObtenerSuscripciones,
+  adminRegistrarPagoSuscripcion,
   type LicenciaAdministrador, type PanelSuscripciones
 } from "@/lib/apps-script-api";
 import { obtenerMaestra, obtenerToken } from "@/lib/session";
@@ -19,12 +20,18 @@ export default function SuscripcionesPage(){
   const [buscar,setBuscar]=useState(""),[filtro,setFiltro]=useState("TODAS"),[plan,setPlan]=useState("");
   const [mensaje,setMensaje]=useState(""),[cargando,setCargando]=useState(false);
   const [pago,setPago]=useState({monto:0,moneda:"USD",metodo:"TRANSFERENCIA",referencia:"",fechaPago:hoy(),notas:""});
+  const [limites,setLimites]=useState<Record<string,number>>({});
   const admin=Boolean(usuario?.esAdmin)||String(usuario?.correo||"").toLowerCase()==="wilmarvelasquez1783@gmail.com";
 
   async function cargar(){
     const token=obtenerToken(); if(!token)return router.replace("/");
     setCargando(true);
-    try{const r=await adminObtenerSuscripciones(token);setPanel(r);if(!plan&&r.planes[0])setPlan(r.planes[0].idPlan)}
+    try{
+      const r=await adminObtenerSuscripciones(token);
+      setPanel(r);
+      setLimites(Object.fromEntries(r.planes.map(p=>[p.idPlan,p.limiteAlumnos])));
+      if(!plan&&r.planes[0])setPlan(r.planes[0].idPlan)
+    }
     catch(e){setMensaje(e instanceof Error?e.message:"No se pudo cargar.")}finally{setCargando(false)}
   }
   useEffect(()=>{if(!admin)router.replace("/dashboard");else void cargar()},[]);
@@ -42,6 +49,23 @@ export default function SuscripcionesPage(){
     await adminCambiarEstadoSuscripcion(token,{idLicencia:seleccionada.idLicencia,estado:valor});
     setMensaje("✅ Estado actualizado.");setSeleccionada(null);await cargar();
   }
+  async function guardarLimite(idPlan:string){
+    const token=obtenerToken();
+    if(!token)return;
+    const limite=Number(limites[idPlan]);
+    try{
+      await adminGuardarLimitesPlan(token,{idPlan,limiteAlumnos:limite});
+      setMensaje(
+        limite<0
+          ?"✅ Plan configurado con alumnos ilimitados."
+          :`✅ Límite configurado en ${limite} alumnos.`
+      );
+      await cargar();
+    }catch(e){
+      setMensaje(e instanceof Error?e.message:"No se pudo guardar el límite.");
+    }
+  }
+
   async function registrar(event:FormEvent){event.preventDefault();if(!seleccionada)return;const token=obtenerToken();if(!token)return;
     await adminRegistrarPagoSuscripcion(token,{...pago,idMaestra:seleccionada.idMaestra,idLicencia:seleccionada.idLicencia,idPlan:plan||seleccionada.idPlan});
     setMensaje("✅ Pago registrado.");setPago({monto:0,moneda:"USD",metodo:"TRANSFERENCIA",referencia:"",fechaPago:hoy(),notas:""});await cargar();
@@ -59,6 +83,34 @@ export default function SuscripcionesPage(){
       <article className="money"><span>🇻🇪</span><strong>{dineroVes(panel.resumen.ingresosVes)}</strong><small>Ingresos VES</small></article>
     </section>
     {mensaje&&<div className="school-message">{mensaje}</div>}
+    <section className="plan-limits-card">
+      <header>
+        <div>
+          <span>CONTROL MANUAL POR PLAN</span>
+          <h2>Límites de alumnos 👩‍🎓</h2>
+          <p>Define cuántos alumnos puede registrar cada maestra según su plan.</p>
+        </div>
+      </header>
+      <div className="plan-limits-grid">
+        {panel.planes.map(p=><article key={p.idPlan}>
+          <div>
+            <h3>{p.nombre}</h3>
+            <p>{p.duracionDias} días · {dineroUsd(p.precioUsd)} / {dineroVes(p.precioVes)}</p>
+          </div>
+          <label>
+            Máximo de alumnos
+            <input
+              type="number"
+              min="-1"
+              value={limites[p.idPlan] ?? p.limiteAlumnos}
+              onChange={e=>setLimites({...limites,[p.idPlan]:Number(e.target.value)})}
+            />
+          </label>
+          <small>Usa <b>-1</b> para alumnos ilimitados.</small>
+          <button onClick={()=>void guardarLimite(p.idPlan)}>💾 Guardar límite</button>
+        </article>)}
+      </div>
+    </section>
     <section className="subscription-filters">
       <input placeholder="Buscar maestra..." value={buscar} onChange={e=>setBuscar(e.target.value)}/>
       <select value={filtro} onChange={e=>setFiltro(e.target.value)}><option value="TODAS">Todos los estados</option><option>ACTIVA</option><option>POR_VENCER</option><option>VENCIDA</option><option>SUSPENDIDA</option><option>BLOQUEADA</option></select>
@@ -74,7 +126,7 @@ export default function SuscripcionesPage(){
     </div></section>
     {seleccionada&&<div className="subscription-modal-backdrop"><section className="subscription-modal">
       <header><div><h2>{seleccionada.nombreMaestra}</h2><p>{seleccionada.correo}</p></div><button onClick={()=>setSeleccionada(null)}>×</button></header>
-      <label>Plan<select value={plan} onChange={e=>setPlan(e.target.value)}>{panel.planes.map(p=><option key={p.idPlan} value={p.idPlan}>{p.nombre} · {p.duracionDias} días · {dineroUsd(p.precioUsd)} / {dineroVes(p.precioVes)}</option>)}</select></label>
+      <label>Plan<select value={plan} onChange={e=>setPlan(e.target.value)}>{panel.planes.map(p=><option key={p.idPlan} value={p.idPlan}>{p.nombre} · {p.duracionDias} días · {p.limiteAlumnos < 0 ? "Ilimitados" : `${p.limiteAlumnos} alumnos`} · {dineroUsd(p.precioUsd)} / {dineroVes(p.precioVes)}</option>)}</select></label>
       <div className="dual-price-note">
         <b>Precios configurados</b>
         <span>USD: {dineroUsd(panel.planes.find(p=>p.idPlan===plan)?.precioUsd||0)}</span>

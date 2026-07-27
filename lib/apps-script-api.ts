@@ -883,6 +883,7 @@ export async function guardarExpedienteAlumno(
 export type PlanPlataforma = {
   idPlan: string; nombre: string; duracionDias: number;
   precioUsd: number; precioVes: number;
+  limiteAlumnos: number;
   estado: string; descripcion: string;
 };
 export type LicenciaAdministrador = {
@@ -911,4 +912,20 @@ export async function adminRegistrarPagoSuscripcion(token:string,datos:{
   referencia?:string;fechaPago?:string;notas?:string;
 }){
   return llamarAppsScript<{guardado:boolean;idPago:string}>({action:"adminRegistrarPagoSuscripcion",token,data:datos});
+}
+
+
+export async function adminGuardarLimitesPlan(
+  token: string,
+  datos: { idPlan: string; limiteAlumnos: number }
+) {
+  return llamarAppsScript<{
+    guardado: boolean;
+    idPlan: string;
+    limiteAlumnos: number;
+  }>({
+    action: "adminGuardarLimitesPlan",
+    token,
+    data: datos,
+  });
 }

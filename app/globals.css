@@ -853,3 +853,19 @@ img{max-width:100%}
 .dual-price-note span{padding:9px;border-radius:10px;background:#fff;font-weight:850}
 @media(max-width:1100px){.subscription-stats{grid-template-columns:repeat(3,1fr)!important}}
 @media(max-width:700px){.subscription-stats{grid-template-columns:1fr 1fr!important}.dual-price-note{grid-template-columns:1fr}}
+
+
+/* Aula Mágica v10.1 - límites manuales por plan */
+.plan-limits-card{margin-bottom:15px;padding:18px;border-radius:20px;background:#fff;border:1px solid #eee2ea;box-shadow:0 8px 24px rgba(53,47,68,.06)}
+.plan-limits-card header span{display:inline-flex;padding:6px 9px;border-radius:999px;background:#f0e9ff;color:#674995;font-size:10px;font-weight:900}
+.plan-limits-card h2{margin:8px 0 4px}.plan-limits-card header p{margin:0 0 14px;color:#7d7182}
+.plan-limits-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.plan-limits-grid article{display:grid;gap:10px;padding:14px;border-radius:16px;background:linear-gradient(145deg,#fff8fc,#f3f9ff);border:1px solid #eadfe7}
+.plan-limits-grid h3{margin:0}.plan-limits-grid p{margin:4px 0 0;color:#7a6e7f;font-size:11px}
+.plan-limits-grid label{display:grid;gap:6px;font-size:12px;font-weight:850;color:#655a6c}
+.plan-limits-grid input{width:100%;padding:10px;border:1px solid #dfd3dc;border-radius:10px;background:#fff;font:inherit}
+.plan-limits-grid small{color:#807484}.plan-limits-grid button{border:0;border-radius:10px;padding:10px;background:linear-gradient(135deg,#ff78b6,#8870ec);color:#fff;font-weight:900;cursor:pointer}
+[data-theme="dark"] .plan-limits-card,[data-theme="dark"] .plan-limits-grid article{background:#261f2e!important;color:#f5eef7!important;border-color:#493b52!important}
+[data-theme="dark"] .plan-limits-grid input{background:#1d1723!important;color:#f5eef7!important;border-color:#51405a!important}
+@media(max-width:1050px){.plan-limits-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:650px){.plan-limits-grid{grid-template-columns:1fr}}
