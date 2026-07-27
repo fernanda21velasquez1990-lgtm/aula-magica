@@ -42,3 +42,40 @@
 
 /* ===== CONFIGURACION Y PERFIL ===== */
 .settings-page{min-height:100vh;padding:14px 8px 80px;color:#352f44}.settings-header{display:flex;justify-content:space-between;align-items:center;gap:22px;padding:28px;margin-bottom:18px;border-radius:28px;background:linear-gradient(135deg,#e8f7ff,#f0e9ff 55%,#ffe7f2);box-shadow:var(--shadow)}.settings-header h1{margin:9px 0 7px;font-size:clamp(34px,5vw,48px)}.settings-header p{margin:0;color:#6a6173}.settings-chip{display:inline-block;padding:7px 13px;border-radius:999px;background:rgba(255,255,255,.84);font-size:13px;font-weight:850}.settings-avatar{display:grid;place-items:center;width:92px;height:92px;border-radius:28px;background:#fff;font-size:54px;box-shadow:var(--shadow)}.settings-message{margin:14px 0;padding:13px 16px;border-radius:14px;background:#fff2be;color:#614d00}.settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.settings-card{padding:24px;border:2px solid #fff;border-radius:25px;background:rgba(255,255,255,.97);box-shadow:var(--shadow)}.settings-card h2{margin:0 0 7px}.settings-help{margin:0 0 18px;color:#746a7b}.settings-readonly{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px}.settings-readonly div{padding:14px;border-radius:16px;background:#f8f5fa;overflow:hidden}.settings-readonly span{display:block;margin-bottom:5px;color:#786e80;font-size:12px;font-weight:800}.settings-readonly strong{display:block;overflow:hidden;text-overflow:ellipsis}.settings-form{display:grid;grid-template-columns:1fr 1fr;gap:14px}.settings-form.one{grid-template-columns:1fr}.settings-form label{display:flex;flex-direction:column;gap:7px;font-weight:800}.settings-form input{width:100%;padding:12px 14px;border:1px solid #e7d8e0;border-radius:13px;background:#fff;color:#352f44;outline:none}.settings-form input:focus{border-color:#7d9cff;box-shadow:0 0 0 4px rgba(125,156,255,.12)}.settings-primary{grid-column:1/-1;border:0;border-radius:15px;padding:13px 18px;color:#fff;background:linear-gradient(135deg,#ff70aa,#ff9ac2);font-weight:900}.settings-primary.blue{background:linear-gradient(135deg,#53bce8,#747cff)}.settings-primary:disabled{opacity:.55;cursor:not-allowed}@media(max-width:850px){.settings-grid{grid-template-columns:1fr}}@media(max-width:620px){.settings-page{padding:4px 0 95px}.settings-header{padding:22px}.settings-avatar{width:70px;height:70px;font-size:42px}.settings-form,.settings-readonly{grid-template-columns:1fr}}
+
+
+/* Asistencia v5.1 - vistas mensual e inasistencias */
+.attendance-tabs{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 18px;padding:8px;border-radius:18px;background:rgba(255,255,255,.72);border:1px solid #eee3eb;box-shadow:0 8px 24px rgba(53,47,68,.06)}
+.attendance-tabs button{flex:1;min-width:180px;border:0;border-radius:13px;padding:12px 15px;background:transparent;color:#5d5366;font-weight:850;cursor:pointer}
+.attendance-tabs button:hover{background:#fff}
+.attendance-tabs button.active{background:linear-gradient(135deg,#ffdaeb,#dff4ff);color:#352f44;box-shadow:0 7px 18px rgba(53,47,68,.1)}
+.attendance-monthly-card,.attendance-absence-card{padding:22px;border-radius:24px;background:#fff;border:1px solid #f0e5eb;box-shadow:0 11px 29px rgba(53,47,68,.085)}
+.attendance-monthly-heading{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:16px}
+.attendance-monthly-heading h2{margin:0 0 5px;font-size:24px}
+.attendance-monthly-heading p{margin:0;color:#756b7d;text-transform:capitalize}
+.attendance-monthly-heading button{border:1px solid #e7dce4;border-radius:13px;padding:10px 14px;background:#fff;color:#352f44;font-weight:850;cursor:pointer}
+.attendance-monthly-legend{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.attendance-monthly-legend span{padding:7px 10px;border-radius:999px;background:#faf5f8;color:#665d70;font-size:12px;font-weight:750}
+.attendance-table-scroll{overflow:auto;border:1px solid #eee4ea;border-radius:17px}
+.attendance-monthly-table{width:max-content;min-width:100%;border-collapse:separate;border-spacing:0;font-size:12px}
+.attendance-monthly-table th,.attendance-monthly-table td{min-width:35px;padding:9px 6px;text-align:center;border-right:1px solid #eee4ea;border-bottom:1px solid #eee4ea}
+.attendance-monthly-table thead th{position:sticky;top:0;z-index:2;background:#fff1f7;color:#554b5e;font-weight:900}
+.attendance-monthly-table .student-column{position:sticky;left:0;z-index:1;min-width:190px;max-width:220px;text-align:left;background:#fff;font-size:12px}
+.attendance-monthly-table thead .student-column{z-index:3;background:#ffe7f2}
+.attendance-monthly-table tr:last-child th,.attendance-monthly-table tr:last-child td{border-bottom:0}
+.attendance-monthly-table .status-presente{background:#def8eb;color:#167348;font-weight:900}
+.attendance-monthly-table .status-ausente{background:#ffe0e6;color:#a42942;font-weight:900}
+.attendance-monthly-table .status-tarde{background:#fff0c8;color:#946400;font-weight:900}
+.attendance-monthly-table .status-justificado{background:#deefff;color:#245e96;font-weight:900}
+.attendance-monthly-table .status-empty{color:#aaa0ad}
+.attendance-absence-list{display:grid;gap:12px}
+.attendance-absence-item{display:flex;gap:14px;align-items:flex-start;padding:16px;border-radius:18px;background:#fcf9fb;border-left:5px solid #b9a9c5}
+.attendance-absence-item.ausente{border-left-color:#f1687e}
+.attendance-absence-item.tarde{border-left-color:#e9a92f}
+.attendance-absence-item.justificado{border-left-color:#5b9dde}
+.attendance-absence-icon{font-size:28px}
+.attendance-absence-info h3{margin:0 0 5px}
+.attendance-absence-info p{margin:0 0 6px;color:#665d70;text-transform:capitalize}
+.attendance-absence-info small{color:#7b7182}
+.attendance-inline-empty{padding:42px 20px;text-align:center;border-radius:18px;background:#faf7f9;color:#746a7b}
+@media(max-width:760px){.attendance-tabs{display:grid;grid-template-columns:1fr}.attendance-tabs button{min-width:0}.attendance-monthly-card,.attendance-absence-card{padding:15px}.attendance-monthly-table .student-column{min-width:155px}.attendance-monthly-heading button{width:100%}}

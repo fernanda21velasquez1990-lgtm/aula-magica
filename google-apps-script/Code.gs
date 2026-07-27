@@ -23,6 +23,13 @@ function onOpen() {
     .addItem('Agregar maestra', 'mostrarFormularioMaestra')
     .addItem('Ver resumen', 'mostrarResumen')
     .addSeparator()
+    .addItem('Configurar bot Telegram', 'configurarBotTelegram')
+    .addItem('Reactivar webhook Telegram', 'reactivarWebhookTelegram')
+    .addSeparator()
+    .addItem('Activar recordatorios automáticos', 'activarRecordatoriosAutomaticos')
+    .addItem('Probar recordatorios ahora', 'probarRecordatoriosAutomaticos')
+    .addItem('Desactivar recordatorios', 'desactivarRecordatoriosAutomaticos')
+    .addSeparator()
     .addItem('Crear respaldo', 'crearRespaldo')
     .addToUi();
 }
@@ -42,7 +49,7 @@ function crearEstructuraInicial() {
   const config = ss.getSheetByName('CONFIGURACION');
   if (config.getLastRow() < 2) config.getRange(2,1,5,3).setValues([
     ['NOMBRE_APLICACION',APP_NAME,'Nombre mostrado en la plataforma'],
-    ['VERSION','2.2.0','Versión actual'],
+    ['VERSION','5.1.0','Versión actual'],
     ['SESION_HORAS','24','Duración de sesión'],
     ['REGISTRO_PUBLICO','SI','Permitir registro'],
     ['TELEGRAM_ACTIVO','NO','Estado del bot']
@@ -50,10 +57,22 @@ function crearEstructuraInicial() {
   SpreadsheetApp.getUi().alert('Aula Mágica','La estructura está lista.',SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
-function doGet() { return responderJson({ok:true,aplicacion:APP_NAME,estado:'API funcionando'}); }
+function doGet() {
+  return responderJson({
+    ok: true,
+    aplicacion: APP_NAME,
+    estado: 'API funcionando',
+    version: '5.1.0'
+  });
+}
 function doPost(e) {
   try {
-    const s = obtenerSolicitud(e), accion=s.action, datos=s.data||{}, token=s.token||'';
+    const s = obtenerSolicitud(e);
+    if(s && (s.message || s.callback_query)){
+      procesarActualizacionTelegram(s);
+      return responderJson({ok:true});
+    }
+    const accion=s.action, datos=s.data||{}, token=s.token||'';
     let resultado;
     switch (accion) {
       case 'registrarMaestra': resultado=registrarMaestra(datos); break;
@@ -66,9 +85,112 @@ function doPost(e) {
       case 'eliminarAlumno': resultado=eliminarAlumno(token,datos); break;
       case 'listarAsistencia': resultado=listarAsistencia(token,datos); break;
       case 'guardarAsistencia': resultado=guardarAsistencia(token,datos); break;
+      case 'listarResumenMensualAsistencia': resultado=listarResumenMensualAsistencia(token,datos); break;
       case 'listarCalificaciones': resultado=listarCalificaciones(token); break;
       case 'guardarCalificacion': resultado=guardarCalificacion(token,datos); break;
       case 'eliminarCalificacion': resultado=eliminarCalificacion(token,datos); break;
+      case 'listarPlanificaciones': resultado=listarPlanificaciones(token); break;
+      case 'guardarPlanificacion': resultado=guardarPlanificacion(token,datos); break;
+      case 'eliminarPlanificacion': resultado=eliminarPlanificacion(token,datos); break;
+      case 'listarCumpleanos': resultado=listarCumpleanos(token); break;
+      case 'guardarCumpleanos': resultado=guardarCumpleanos(token,datos); break;
+      case 'eliminarCumpleanos': resultado=eliminarCumpleanos(token,datos); break;
+      case 'listarReuniones': resultado=listarReuniones(token); break;
+      case 'guardarReunion': resultado=guardarReunion(token,datos); break;
+      case 'eliminarReunion': resultado=eliminarReunion(token,datos); break;
+      case 'listarAgenda': resultado=listarAgenda(token); break;
+      case 'guardarEventoAgenda': resultado=guardarEventoAgenda(token,datos); break;
+      case 'eliminarEventoAgenda': resultado=eliminarEventoAgenda(token,datos); break;
+      case 'obtenerEstadoTelegram': resultado=obtenerEstadoTelegram(token); break;
+      case 'generarCodigoTelegram': resultado=generarCodigoTelegram(token); break;
+      case 'desvincularTelegram': resultado=desvincularTelegram(token); break;
+      case 'enviarPruebaTelegram': resultado=enviarPruebaTelegram(token); break;
+      case 'actualizarPerfilMaestra': resultado=actualizarPerfilMaestra(token,datos); break;
+      case 'cambiarContrasenaMaestra': resultado=cambiarContrasenaMaestra(token,datos); break;
+      case 'botVincularTelegramVercel': resultado=botVincularTelegramVercel(datos); break;
+      case 'botComandoTelegramVercel': resultado=botComandoTelegramVercel(datos); break;
+      case 'botListarAlumnosAsistencia': resultado=botListarAlumnosAsistencia(datos); break;
+      case 'botGuardarAsistenciaRapida': resultado=botGuardarAsistenciaRapida(datos); break;
+      case 'botIniciarAgendaTelegram': resultado=botIniciarAgendaTelegram(datos); break;
+      case 'botProcesarFlujoAgendaTelegram': resultado=botProcesarFlujoAgendaTelegram(datos); break;
+      case 'botSeleccionarTipoAgendaTelegram': resultado=botSeleccionarTipoAgendaTelegram(datos); break;
+      case 'botConfirmarAgendaTelegram': resultado=botConfirmarAgendaTelegram(datos); break;
+      case 'botCancelarFlujoAgendaTelegram': resultado=botCancelarFlujoAgendaTelegram(datos); break;
+      case 'botIniciarReunionTelegram': resultado=botIniciarReunionTelegram(datos); break;
+      case 'botProcesarFlujoReunionTelegram': resultado=botProcesarFlujoReunionTelegram(datos); break;
+      case 'botConfirmarReunionTelegram': resultado=botConfirmarReunionTelegram(datos); break;
+      case 'botCancelarFlujoReunionTelegram': resultado=botCancelarFlujoReunionTelegram(datos); break;
+      case 'botIniciarPlanificacionTelegram': resultado=botIniciarPlanificacionTelegram(datos); break;
+      case 'botProcesarFlujoPlanificacionTelegram': resultado=botProcesarFlujoPlanificacionTelegram(datos); break;
+      case 'botConfirmarPlanificacionTelegram': resultado=botConfirmarPlanificacionTelegram(datos); break;
+      case 'botCancelarFlujoPlanificacionTelegram': resultado=botCancelarFlujoPlanificacionTelegram(datos); break;
+      case 'botIniciarCalificacionTelegram': resultado=botIniciarCalificacionTelegram(datos); break;
+      case 'botSeleccionarAlumnoCalificacionTelegram': resultado=botSeleccionarAlumnoCalificacionTelegram(datos); break;
+      case 'botSeleccionarAsignaturaCalificacionTelegram': resultado=botSeleccionarAsignaturaCalificacionTelegram(datos); break;
+      case 'botSeleccionarPeriodoCalificacionTelegram': resultado=botSeleccionarPeriodoCalificacionTelegram(datos); break;
+      case 'botProcesarFlujoCalificacionTelegram': resultado=botProcesarFlujoCalificacionTelegram(datos); break;
+      case 'botConfirmarCalificacionTelegram': resultado=botConfirmarCalificacionTelegram(datos); break;
+      case 'botCancelarFlujoCalificacionTelegram': resultado=botCancelarFlujoCalificacionTelegram(datos); break;
+      case 'botIniciarAlumnoTelegram': resultado=botIniciarAlumnoTelegram(datos); break;
+      case 'botSeleccionarSexoAlumnoTelegram': resultado=botSeleccionarSexoAlumnoTelegram(datos); break;
+      case 'botProcesarFlujoAlumnoTelegram': resultado=botProcesarFlujoAlumnoTelegram(datos); break;
+      case 'botConfirmarAlumnoTelegram': resultado=botConfirmarAlumnoTelegram(datos); break;
+      case 'botCancelarFlujoAlumnoTelegram': resultado=botCancelarFlujoAlumnoTelegram(datos); break;
+      case 'botIniciarCumpleanosTelegram': resultado=botIniciarCumpleanosTelegram(datos); break;
+      case 'botSeleccionarAlumnoCumpleanosTelegram': resultado=botSeleccionarAlumnoCumpleanosTelegram(datos); break;
+      case 'botProcesarFlujoCumpleanosTelegram': resultado=botProcesarFlujoCumpleanosTelegram(datos); break;
+      case 'botConfirmarCumpleanosTelegram': resultado=botConfirmarCumpleanosTelegram(datos); break;
+      case 'botQuitarCumpleanosTelegram': resultado=botQuitarCumpleanosTelegram(datos); break;
+      case 'botCancelarFlujoCumpleanosTelegram': resultado=botCancelarFlujoCumpleanosTelegram(datos); break;
+      case 'botGenerarReporteTelegram': resultado=botGenerarReporteTelegram(datos); break;
+      case 'botObtenerPerfilTelegram': resultado=botObtenerPerfilTelegram(datos); break;
+      case 'botIniciarPerfilTelegram': resultado=botIniciarPerfilTelegram(datos); break;
+      case 'botProcesarFlujoPerfilTelegram': resultado=botProcesarFlujoPerfilTelegram(datos); break;
+      case 'botConfirmarPerfilTelegram': resultado=botConfirmarPerfilTelegram(datos); break;
+      case 'botCancelarFlujoPerfilTelegram': resultado=botCancelarFlujoPerfilTelegram(datos); break;
+      case 'botListarEventosGestionTelegram': resultado=botListarEventosGestionTelegram(datos); break;
+      case 'botObtenerEventoGestionTelegram': resultado=botObtenerEventoGestionTelegram(datos); break;
+      case 'botCambiarEstadoEventoTelegram': resultado=botCambiarEstadoEventoTelegram(datos); break;
+      case 'botEliminarEventoTelegram': resultado=botEliminarEventoTelegram(datos); break;
+      case 'botListarReunionesGestionTelegram': resultado=botListarReunionesGestionTelegram(datos); break;
+      case 'botObtenerReunionGestionTelegram': resultado=botObtenerReunionGestionTelegram(datos); break;
+      case 'botCambiarEstadoReunionTelegram': resultado=botCambiarEstadoReunionTelegram(datos); break;
+      case 'botEliminarReunionTelegram': resultado=botEliminarReunionTelegram(datos); break;
+      case 'botListarPlanesGestionTelegram': resultado=botListarPlanesGestionTelegram(datos); break;
+      case 'botObtenerPlanGestionTelegram': resultado=botObtenerPlanGestionTelegram(datos); break;
+      case 'botCambiarEstadoPlanTelegram': resultado=botCambiarEstadoPlanTelegram(datos); break;
+      case 'botEliminarPlanTelegram': resultado=botEliminarPlanTelegram(datos); break;
+      case 'botListarCalificacionesGestionTelegram': resultado=botListarCalificacionesGestionTelegram(datos); break;
+      case 'botObtenerCalificacionGestionTelegram': resultado=botObtenerCalificacionGestionTelegram(datos); break;
+      case 'botIniciarEdicionCalificacionTelegram': resultado=botIniciarEdicionCalificacionTelegram(datos); break;
+      case 'botProcesarEdicionCalificacionTelegram': resultado=botProcesarEdicionCalificacionTelegram(datos); break;
+      case 'botConfirmarEdicionCalificacionTelegram': resultado=botConfirmarEdicionCalificacionTelegram(datos); break;
+      case 'botCancelarEdicionCalificacionTelegram': resultado=botCancelarEdicionCalificacionTelegram(datos); break;
+      case 'botEliminarCalificacionTelegram': resultado=botEliminarCalificacionTelegram(datos); break;
+      case 'botListarAlumnosGestionTelegram': resultado=botListarAlumnosGestionTelegram(datos); break;
+      case 'botObtenerAlumnoGestionTelegram': resultado=botObtenerAlumnoGestionTelegram(datos); break;
+      case 'botIniciarEdicionAlumnoTelegram': resultado=botIniciarEdicionAlumnoTelegram(datos); break;
+      case 'botProcesarEdicionAlumnoTelegram': resultado=botProcesarEdicionAlumnoTelegram(datos); break;
+      case 'botConfirmarEdicionAlumnoTelegram': resultado=botConfirmarEdicionAlumnoTelegram(datos); break;
+      case 'botCancelarEdicionAlumnoTelegram': resultado=botCancelarEdicionAlumnoTelegram(datos); break;
+      case 'botCambiarEstadoAlumnoTelegram': resultado=botCambiarEstadoAlumnoTelegram(datos); break;
+      case 'botEliminarAlumnoTelegram': resultado=botEliminarAlumnoTelegram(datos); break;
+      case 'botListarAsistenciaGestionTelegram': resultado=botListarAsistenciaGestionTelegram(datos); break;
+      case 'botObtenerAsistenciaGestionTelegram': resultado=botObtenerAsistenciaGestionTelegram(datos); break;
+      case 'botCambiarEstadoAsistenciaTelegram': resultado=botCambiarEstadoAsistenciaTelegram(datos); break;
+      case 'botEliminarAsistenciaTelegram': resultado=botEliminarAsistenciaTelegram(datos); break;
+      case 'botIniciarEdicionEventoTelegram': resultado=botIniciarEdicionEventoTelegram(datos); break;
+      case 'botProcesarEdicionEventoTelegram': resultado=botProcesarEdicionEventoTelegram(datos); break;
+      case 'botConfirmarEdicionEventoTelegram': resultado=botConfirmarEdicionEventoTelegram(datos); break;
+      case 'botCancelarEdicionEventoTelegram': resultado=botCancelarEdicionEventoTelegram(datos); break;
+      case 'botIniciarEdicionReunionTelegram': resultado=botIniciarEdicionReunionTelegram(datos); break;
+      case 'botProcesarEdicionReunionTelegram': resultado=botProcesarEdicionReunionTelegram(datos); break;
+      case 'botConfirmarEdicionReunionTelegram': resultado=botConfirmarEdicionReunionTelegram(datos); break;
+      case 'botCancelarEdicionReunionTelegram': resultado=botCancelarEdicionReunionTelegram(datos); break;
+      case 'botIniciarEdicionPlanTelegram': resultado=botIniciarEdicionPlanTelegram(datos); break;
+      case 'botProcesarEdicionPlanTelegram': resultado=botProcesarEdicionPlanTelegram(datos); break;
+      case 'botConfirmarEdicionPlanTelegram': resultado=botConfirmarEdicionPlanTelegram(datos); break;
+      case 'botCancelarEdicionPlanTelegram': resultado=botCancelarEdicionPlanTelegram(datos); break;
       default: throw new Error('La acción "'+accion+'" no existe.');
     }
     return responderJson({ok:true,resultado});
@@ -119,7 +241,7 @@ function crearAlumno(token,datos){
   obtenerHoja('ALUMNOS').appendRow([a.idAlumno,a.idMaestra,a.nombre,a.apellido,a.documento,a.fechaNacimiento,a.sexo,a.grado,a.seccion,a.representante,a.telefono,a.direccion,a.observaciones,a.estado,a.fechaRegistro]);
   registrarAuditoria(m.idMaestra,'CREAR','ALUMNOS','Alumno creado: '+a.nombre+' '+a.apellido); return a;
 }
-function listarAlumnos(token){ const m=verificarSesion(token); return obtenerRegistros('ALUMNOS').filter(r=>String(r.ID_MAESTRA)===String(m.idMaestra)&&String(r.ESTADO).toUpperCase()!=='ELIMINADO').map(convertirAlumno).sort((a,b)=>(a.nombre+' '+a.apellido).localeCompare(b.nombre+' '+b.apellido)); }
+function listarAlumnos(token){ const m=verificarSesion(token); return obtenerRegistros('ALUMNOS').filter(r=>String(r.ID_MAESTRA||'').trim()===String(m.idMaestra||'').trim()&&String(r.ESTADO).toUpperCase()!=='ELIMINADO').map(convertirAlumno).sort((a,b)=>(a.nombre+' '+a.apellido).localeCompare(b.nombre+' '+b.apellido)); }
 function editarAlumno(token,datos){
   const m=verificarSesion(token); validarObjeto(datos,['idAlumno','nombre','apellido']); const h=obtenerHoja('ALUMNOS');
   const r=obtenerRegistrosConFila('ALUMNOS').find(x=>String(x.ID_ALUMNO)===String(datos.idAlumno)&&String(x.ID_MAESTRA)===String(m.idMaestra)&&String(x.ESTADO).toUpperCase()!=='ELIMINADO');
@@ -133,19 +255,231 @@ function convertirAlumno(r){return {idAlumno:String(r.ID_ALUMNO||''),nombre:Stri
 
 
 function listarAsistencia(token,datos){
-  const m=verificarSesion(token); validarObjeto(datos,['fecha']);
+  const m=verificarSesion(token);
+  validarObjeto(datos,['fecha']);
+
   const fecha=normalizarFechaAsistencia(datos.fecha);
   const alumnos=obtenerRegistros('ALUMNOS')
-    .filter(r=>String(r.ID_MAESTRA)===String(m.idMaestra)&&String(r.ESTADO).toUpperCase()!=='ELIMINADO');
-  const registros=obtenerRegistros('ASISTENCIA')
-    .filter(r=>String(r.ID_MAESTRA)===String(m.idMaestra)&&normalizarFechaAsistencia(r.FECHA)===fecha);
+    .filter(r=>
+      String(r.ID_MAESTRA||'').trim()===String(m.idMaestra||'').trim()&&
+      String(r.ESTADO).toUpperCase()!=='ELIMINADO'
+    );
+
+  const registros=obtenerRegistrosConFila('ASISTENCIA')
+    .filter(r=>
+      String(r.ID_MAESTRA||'').trim()===String(m.idMaestra||'').trim()&&
+      normalizarFechaAsistencia(r.FECHA)===fecha
+    );
+
+  // Para cada alumno usamos siempre el registro más reciente.
+  // Esto evita que filas antiguas o duplicadas oculten el cambio hecho desde Telegram.
   const porAlumno={};
-  registros.forEach(r=>{porAlumno[String(r.ID_ALUMNO)]={estado:String(r.ESTADO||'').toUpperCase(),observaciones:String(r.OBSERVACIONES||'')}});
+  registros.forEach(r=>{
+    const idAlumno=String(r.ID_ALUMNO||'').trim();
+    if(!idAlumno)return;
+
+    const fechaRegistro=obtenerTimestampAsistencia(r.FECHA_REGISTRO);
+    const existente=porAlumno[idAlumno];
+
+    if(
+      !existente||
+      fechaRegistro>existente.__timestamp||
+      (
+        fechaRegistro===existente.__timestamp&&
+        Number(r.__fila||0)>Number(existente.__fila||0)
+      )
+    ){
+      porAlumno[idAlumno]={
+        estado:String(r.ESTADO||'').trim().toUpperCase(),
+        observaciones:String(r.OBSERVACIONES||''),
+        __timestamp:fechaRegistro,
+        __fila:Number(r.__fila||0)
+      };
+    }
+  });
+
   return alumnos.map(r=>{
-    const existente=porAlumno[String(r.ID_ALUMNO)]||{};
-    return {idAlumno:String(r.ID_ALUMNO||''),nombre:String(r.NOMBRE||''),apellido:String(r.APELLIDO||''),sexo:String(r.SEXO||''),grado:String(r.GRADO||''),seccion:String(r.SECCION||''),estado:existente.estado||'',observaciones:existente.observaciones||''};
-  }).sort((a,b)=>(a.nombre+' '+a.apellido).localeCompare(b.nombre+' '+b.apellido));
+    const existente=porAlumno[String(r.ID_ALUMNO||'').trim()]||{};
+    return {
+      idAlumno:String(r.ID_ALUMNO||''),
+      nombre:String(r.NOMBRE||''),
+      apellido:String(r.APELLIDO||''),
+      sexo:String(r.SEXO||''),
+      grado:String(r.GRADO||''),
+      seccion:String(r.SECCION||''),
+      estado:existente.estado||'',
+      observaciones:existente.observaciones||''
+    };
+  }).sort((a,b)=>
+    (a.nombre+' '+a.apellido).localeCompare(b.nombre+' '+b.apellido)
+  );
 }
+
+function listarResumenMensualAsistencia(token,datos){
+  const maestra=verificarSesion(token);
+  validarObjeto(datos,['mes']);
+
+  const mes=String(datos.mes||'').trim();
+  if(!/^\d{4}-\d{2}$/.test(mes)){
+    throw new Error('El mes debe tener el formato AAAA-MM.');
+  }
+
+  const partes=mes.split('-').map(Number);
+  const totalDias=new Date(partes[0],partes[1],0).getDate();
+  const dias=Array.from({length:totalDias},(_,indice)=>indice+1);
+
+  const alumnos=obtenerRegistros('ALUMNOS')
+    .filter(r=>
+      String(r.ID_MAESTRA||'').trim()===String(maestra.idMaestra||'').trim()&&
+      String(r.ESTADO||'').trim().toUpperCase()!=='ELIMINADO'
+    )
+    .map(r=>({
+      idAlumno:String(r.ID_ALUMNO||''),
+      nombre:String(r.NOMBRE||''),
+      apellido:String(r.APELLIDO||''),
+      grado:String(r.GRADO||''),
+      seccion:String(r.SECCION||'')
+    }))
+    .sort((a,b)=>
+      (a.nombre+' '+a.apellido).localeCompare(b.nombre+' '+b.apellido)
+    );
+
+  const registros=obtenerRegistrosConFila('ASISTENCIA')
+    .filter(r=>
+      String(r.ID_MAESTRA||'').trim()===String(maestra.idMaestra||'').trim()&&
+      normalizarFechaAsistencia(r.FECHA).slice(0,7)===mes
+    );
+
+  const ultimos={};
+
+  registros.forEach(r=>{
+    const idAlumno=String(r.ID_ALUMNO||'').trim();
+    const fecha=normalizarFechaAsistencia(r.FECHA);
+    const clave=idAlumno+'|'+fecha;
+    const timestamp=obtenerTimestampAsistencia(r.FECHA_REGISTRO);
+    const actual=ultimos[clave];
+
+    if(
+      !actual||
+      timestamp>actual.__timestamp||
+      (
+        timestamp===actual.__timestamp&&
+        Number(r.__fila||0)>Number(actual.__fila||0)
+      )
+    ){
+      ultimos[clave]={
+        idAsistencia:String(r.ID_ASISTENCIA||''),
+        idAlumno:idAlumno,
+        fecha:fecha,
+        estado:String(r.ESTADO||'').trim().toUpperCase(),
+        observaciones:String(r.OBSERVACIONES||''),
+        __timestamp:timestamp,
+        __fila:Number(r.__fila||0)
+      };
+    }
+  });
+
+  const totales={
+    PRESENTE:0,
+    AUSENTE:0,
+    TARDE:0,
+    JUSTIFICADO:0,
+    SIN_MARCAR:0
+  };
+
+  const filas=alumnos.map(alumno=>{
+    const estados={};
+    const resumen={
+      PRESENTE:0,
+      AUSENTE:0,
+      TARDE:0,
+      JUSTIFICADO:0,
+      SIN_MARCAR:0
+    };
+
+    dias.forEach(dia=>{
+      const fecha=mes+'-'+String(dia).padStart(2,'0');
+      const registro=ultimos[alumno.idAlumno+'|'+fecha];
+      const estado=registro?registro.estado:'';
+
+      estados[String(dia)]=estado;
+
+      if(estado&&Object.prototype.hasOwnProperty.call(resumen,estado)){
+        resumen[estado]++;
+        totales[estado]++;
+      }else{
+        resumen.SIN_MARCAR++;
+        totales.SIN_MARCAR++;
+      }
+    });
+
+    return Object.assign({},alumno,{
+      estados:estados,
+      resumen:resumen
+    });
+  });
+
+  const nombrePorId={};
+  alumnos.forEach(a=>{
+    nombrePorId[a.idAlumno]=(a.nombre+' '+a.apellido).trim();
+  });
+
+  const inasistencias=Object.keys(ultimos)
+    .map(clave=>ultimos[clave])
+    .filter(r=>['AUSENTE','TARDE','JUSTIFICADO'].includes(r.estado))
+    .map(r=>({
+      idAsistencia:r.idAsistencia,
+      idAlumno:r.idAlumno,
+      nombreAlumno:nombrePorId[r.idAlumno]||'Alumno',
+      fecha:r.fecha,
+      estado:r.estado,
+      observaciones:r.observaciones
+    }))
+    .sort((a,b)=>
+      b.fecha.localeCompare(a.fecha)||
+      a.nombreAlumno.localeCompare(b.nombreAlumno)
+    );
+
+  return {
+    mes:mes,
+    dias:dias,
+    alumnos:filas,
+    totales:totales,
+    inasistencias:inasistencias
+  };
+}
+
+
+function obtenerTimestampAsistencia(valor){
+  if(!valor)return 0;
+  if(
+    Object.prototype.toString.call(valor)==='[object Date]'&&
+    !Number.isNaN(valor.getTime())
+  ){
+    return valor.getTime();
+  }
+
+  const texto=String(valor).trim();
+
+  // Formato habitual de Google Sheets: dd/MM/yyyy HH:mm:ss
+  const coincidencia=texto.match(
+    /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/
+  );
+  if(coincidencia){
+    return new Date(
+      Number(coincidencia[3]),
+      Number(coincidencia[2])-1,
+      Number(coincidencia[1]),
+      Number(coincidencia[4]||0),
+      Number(coincidencia[5]||0),
+      Number(coincidencia[6]||0)
+    ).getTime();
+  }
+
+  const fecha=new Date(texto);
+  return Number.isNaN(fecha.getTime())?0:fecha.getTime();
+}
+
 
 function guardarAsistencia(token,datos){
   const m=verificarSesion(token); validarObjeto(datos,['fecha','registros']);
@@ -154,12 +488,12 @@ function guardarAsistencia(token,datos){
   const estadosPermitidos=['PRESENTE','AUSENTE','TARDE','JUSTIFICADO'];
   const alumnosValidos={};
   obtenerRegistros('ALUMNOS').forEach(r=>{
-    if(String(r.ID_MAESTRA)===String(m.idMaestra)&&String(r.ESTADO).toUpperCase()!=='ELIMINADO') alumnosValidos[String(r.ID_ALUMNO)]=true;
+    if(String(r.ID_MAESTRA||'').trim()===String(m.idMaestra||'').trim()&&String(r.ESTADO).toUpperCase()!=='ELIMINADO') alumnosValidos[String(r.ID_ALUMNO)]=true;
   });
   const hoja=obtenerHoja('ASISTENCIA');
   const existentes={};
   obtenerRegistrosConFila('ASISTENCIA').forEach(r=>{
-    if(String(r.ID_MAESTRA)===String(m.idMaestra)&&normalizarFechaAsistencia(r.FECHA)===fecha) existentes[String(r.ID_ALUMNO)]=r;
+    if(String(r.ID_MAESTRA||'').trim()===String(m.idMaestra||'').trim()&&normalizarFechaAsistencia(r.FECHA)===fecha) existentes[String(r.ID_ALUMNO)]=r;
   });
   const lock=LockService.getScriptLock();
   lock.waitLock(20000);
@@ -185,14 +519,44 @@ function guardarAsistencia(token,datos){
   }
 }
 
+function obtenerZonaHorariaAulaMagica(){
+  try{
+    const zona=SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();
+    return zona||Session.getScriptTimeZone()||'America/Bogota';
+  }catch(_){
+    return Session.getScriptTimeZone()||'America/Bogota';
+  }
+}
+
 function normalizarFechaAsistencia(valor){
   if(!valor) throw new Error('La fecha es obligatoria.');
-  if(Object.prototype.toString.call(valor)==='[object Date]'&&!Number.isNaN(valor.getTime())) return Utilities.formatDate(valor,Session.getScriptTimeZone(),'yyyy-MM-dd');
+
+  const zona=obtenerZonaHorariaAulaMagica();
+
+  if(
+    Object.prototype.toString.call(valor)==='[object Date]'&&
+    !Number.isNaN(valor.getTime())
+  ){
+    return Utilities.formatDate(valor,zona,'yyyy-MM-dd');
+  }
+
   const texto=String(valor).trim();
+
   if(/^\d{4}-\d{2}-\d{2}$/.test(texto)) return texto;
+
+  const formatoLatino=texto.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if(formatoLatino){
+    return [
+      formatoLatino[3],
+      String(formatoLatino[2]).padStart(2,'0'),
+      String(formatoLatino[1]).padStart(2,'0')
+    ].join('-');
+  }
+
   const fecha=new Date(texto);
   if(Number.isNaN(fecha.getTime())) throw new Error('La fecha no es válida.');
-  return Utilities.formatDate(fecha,Session.getScriptTimeZone(),'yyyy-MM-dd');
+
+  return Utilities.formatDate(fecha,zona,'yyyy-MM-dd');
 }
 
 
@@ -200,12 +564,12 @@ function listarCalificaciones(token){
   const m=verificarSesion(token);
   const alumnos={};
   obtenerRegistros('ALUMNOS').forEach(r=>{
-    if(String(r.ID_MAESTRA)===String(m.idMaestra)&&String(r.ESTADO).toUpperCase()!=='ELIMINADO'){
+    if(String(r.ID_MAESTRA||'').trim()===String(m.idMaestra||'').trim()&&String(r.ESTADO).toUpperCase()!=='ELIMINADO'){
       alumnos[String(r.ID_ALUMNO)]=String(r.NOMBRE||'')+' '+String(r.APELLIDO||'');
     }
   });
   return obtenerRegistros('CALIFICACIONES')
-    .filter(r=>String(r.ID_MAESTRA)===String(m.idMaestra)&&alumnos[String(r.ID_ALUMNO)])
+    .filter(r=>String(r.ID_MAESTRA||'').trim()===String(m.idMaestra||'').trim()&&alumnos[String(r.ID_ALUMNO)])
     .map(r=>({
       idCalificacion:String(r.ID_CALIFICACION||''),
       idAlumno:String(r.ID_ALUMNO||''),
@@ -226,7 +590,7 @@ function guardarCalificacion(token,datos){
   validarObjeto(datos,['idAlumno','asignatura','actividad','periodo','calificacion','calificacionMaxima','fecha']);
   const alumno=obtenerRegistros('ALUMNOS').find(r=>
     String(r.ID_ALUMNO)===String(datos.idAlumno)&&
-    String(r.ID_MAESTRA)===String(m.idMaestra)&&
+    String(r.ID_MAESTRA||'').trim()===String(m.idMaestra||'').trim()&&
     String(r.ESTADO).toUpperCase()!=='ELIMINADO'
   );
   if(!alumno) throw new Error('El alumno no pertenece a esta maestra.');
@@ -325,3 +689,6310 @@ function obtenerRegistros(n){return obtenerRegistrosConFila(n).map(r=>{delete r.
 function obtenerRegistrosConFila(n){const h=obtenerHoja(n),uf=h.getLastRow(),uc=h.getLastColumn();if(uf<2||uc<1)return[];const v=h.getRange(1,1,uf,uc).getValues(),e=v[0].map(x=>String(x).trim());return v.slice(1).map((fila,i)=>{const r={__fila:i+2};e.forEach((x,j)=>r[x]=fila[j]);return r}).filter(r=>e.some(x=>String(r[x]||'').trim()!==''))}
 function registrarAuditoria(id,a,m,d){obtenerHoja('AUDITORIA').appendRow([generarId('AUD'),id||'',a,m,d,new Date(),''])}
 function formatearFechaParaFormulario(v){if(!v)return'';if(Object.prototype.toString.call(v)==='[object Date]'&&!Number.isNaN(v.getTime()))return Utilities.formatDate(v,Session.getScriptTimeZone(),'yyyy-MM-dd');return String(v)}
+
+
+function listarPlanificaciones(token){
+  const m=verificarSesion(token);
+  return obtenerRegistros('PLANIFICACION')
+    .filter(r=>String(r.ID_MAESTRA)===String(m.idMaestra))
+    .map(r=>({
+      idPlanificacion:String(r.ID_PLANIFICACION||''),
+      titulo:String(r.TITULO||''),
+      asignatura:String(r.ASIGNATURA||''),
+      grado:String(r.GRADO||''),
+      fecha:formatearFechaParaFormulario(r.FECHA),
+      objetivo:String(r.OBJETIVO||''),
+      contenido:String(r.CONTENIDO||''),
+      actividades:String(r.ACTIVIDADES||''),
+      recursos:String(r.RECURSOS||''),
+      evaluacion:String(r.EVALUACION||''),
+      estado:String(r.ESTADO||'PLANIFICADA').toUpperCase(),
+      fechaRegistro:formatearFechaHoraPlanificacion(r.FECHA_REGISTRO)
+    }))
+    .sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha))||a.titulo.localeCompare(b.titulo));
+}
+
+function guardarPlanificacion(token,datos){
+  const m=verificarSesion(token);
+  validarObjeto(datos,['titulo','asignatura','fecha','objetivo','contenido','actividades']);
+
+  const estadosPermitidos=['BORRADOR','PLANIFICADA','COMPLETADA'];
+  const estado=limpiarTexto(datos.estado||'PLANIFICADA').toUpperCase();
+  if(!estadosPermitidos.includes(estado)) throw new Error('El estado de la planificación no es válido.');
+
+  const fecha=normalizarFechaPlanificacion(datos.fecha);
+  const hoja=obtenerHoja('PLANIFICACION');
+  const idSolicitado=limpiarTexto(datos.idPlanificacion||'');
+  const registro={
+    idPlanificacion:idSolicitado||generarId('PLA'),
+    titulo:limpiarTexto(datos.titulo),
+    asignatura:limpiarTexto(datos.asignatura),
+    grado:limpiarTexto(datos.grado||m.grado||''),
+    fecha:fecha,
+    objetivo:limpiarTexto(datos.objetivo),
+    contenido:limpiarTexto(datos.contenido),
+    actividades:limpiarTexto(datos.actividades),
+    recursos:limpiarTexto(datos.recursos||''),
+    evaluacion:limpiarTexto(datos.evaluacion||''),
+    estado:estado,
+    fechaRegistro:new Date()
+  };
+
+  const lock=LockService.getScriptLock();
+  lock.waitLock(20000);
+  try{
+    if(idSolicitado){
+      const existente=obtenerRegistrosConFila('PLANIFICACION').find(r=>
+        String(r.ID_PLANIFICACION)===idSolicitado&&
+        String(r.ID_MAESTRA)===String(m.idMaestra)
+      );
+      if(!existente) throw new Error('No se encontró la planificación o no tienes permiso.');
+      registro.fechaRegistro=existente.FECHA_REGISTRO||new Date();
+      hoja.getRange(existente.__fila,1,1,13).setValues([[
+        registro.idPlanificacion,m.idMaestra,registro.titulo,registro.asignatura,
+        registro.grado,registro.fecha,registro.objetivo,registro.contenido,
+        registro.actividades,registro.recursos,registro.evaluacion,
+        registro.estado,registro.fechaRegistro
+      ]]);
+      registrarAuditoria(m.idMaestra,'EDITAR','PLANIFICACION','Planificación actualizada: '+registro.titulo);
+    }else{
+      hoja.appendRow([
+        registro.idPlanificacion,m.idMaestra,registro.titulo,registro.asignatura,
+        registro.grado,registro.fecha,registro.objetivo,registro.contenido,
+        registro.actividades,registro.recursos,registro.evaluacion,
+        registro.estado,registro.fechaRegistro
+      ]);
+      registrarAuditoria(m.idMaestra,'CREAR','PLANIFICACION','Planificación creada: '+registro.titulo);
+    }
+  }finally{
+    lock.releaseLock();
+  }
+
+  return {
+    idPlanificacion:registro.idPlanificacion,
+    titulo:registro.titulo,
+    asignatura:registro.asignatura,
+    grado:registro.grado,
+    fecha:registro.fecha,
+    objetivo:registro.objetivo,
+    contenido:registro.contenido,
+    actividades:registro.actividades,
+    recursos:registro.recursos,
+    evaluacion:registro.evaluacion,
+    estado:registro.estado,
+    fechaRegistro:formatearFechaHoraPlanificacion(registro.fechaRegistro)
+  };
+}
+
+function eliminarPlanificacion(token,datos){
+  const m=verificarSesion(token);
+  validarObjeto(datos,['idPlanificacion']);
+  const hoja=obtenerHoja('PLANIFICACION');
+  const existente=obtenerRegistrosConFila('PLANIFICACION').find(r=>
+    String(r.ID_PLANIFICACION)===String(datos.idPlanificacion)&&
+    String(r.ID_MAESTRA)===String(m.idMaestra)
+  );
+  if(!existente) throw new Error('No se encontró la planificación o no tienes permiso.');
+  hoja.deleteRow(existente.__fila);
+  registrarAuditoria(m.idMaestra,'ELIMINAR','PLANIFICACION','Planificación eliminada');
+  return {eliminado:true,idPlanificacion:String(datos.idPlanificacion)};
+}
+
+function normalizarFechaPlanificacion(valor){
+  if(!valor) throw new Error('La fecha es obligatoria.');
+  if(Object.prototype.toString.call(valor)==='[object Date]'&&!Number.isNaN(valor.getTime())){
+    return Utilities.formatDate(valor,Session.getScriptTimeZone(),'yyyy-MM-dd');
+  }
+  const texto=String(valor).trim();
+  if(/^\d{4}-\d{2}-\d{2}$/.test(texto)) return texto;
+  const fecha=new Date(texto);
+  if(Number.isNaN(fecha.getTime())) throw new Error('La fecha no es válida.');
+  return Utilities.formatDate(fecha,Session.getScriptTimeZone(),'yyyy-MM-dd');
+}
+
+function formatearFechaHoraPlanificacion(valor){
+  if(!valor) return '';
+  if(Object.prototype.toString.call(valor)==='[object Date]'&&!Number.isNaN(valor.getTime())){
+    return Utilities.formatDate(valor,Session.getScriptTimeZone(),'yyyy-MM-dd HH:mm:ss');
+  }
+  return String(valor);
+}
+
+
+function listarCumpleanos(token){
+  const m=verificarSesion(token);
+  const notas={};
+  obtenerRegistros('CUMPLEANOS').forEach(r=>{
+    if(String(r.ID_MAESTRA)===String(m.idMaestra)){
+      notas[String(r.ID_ALUMNO)]={
+        fechaNacimiento:formatearFechaParaFormulario(r.FECHA_NACIMIENTO),
+        notas:String(r.NOTAS||'')
+      };
+    }
+  });
+
+  return obtenerRegistros('ALUMNOS')
+    .filter(r=>String(r.ID_MAESTRA||'').trim()===String(m.idMaestra||'').trim()&&String(r.ESTADO).toUpperCase()!=='ELIMINADO')
+    .map(r=>{
+      const guardado=notas[String(r.ID_ALUMNO)]||{};
+      return {
+        idAlumno:String(r.ID_ALUMNO||''),
+        nombre:String(r.NOMBRE||''),
+        apellido:String(r.APELLIDO||''),
+        sexo:String(r.SEXO||''),
+        grado:String(r.GRADO||''),
+        seccion:String(r.SECCION||''),
+        fechaNacimiento:formatearFechaParaFormulario(r.FECHA_NACIMIENTO)||guardado.fechaNacimiento||'',
+        notas:guardado.notas||''
+      };
+    })
+    .sort((a,b)=>(a.nombre+' '+a.apellido).localeCompare(b.nombre+' '+b.apellido));
+}
+
+function guardarCumpleanos(token,datos){
+  const m=verificarSesion(token);
+  validarObjeto(datos,['idAlumno','fechaNacimiento']);
+  const fecha=normalizarFechaCumpleanos(datos.fechaNacimiento);
+  const alumno=obtenerRegistrosConFila('ALUMNOS').find(r=>
+    String(r.ID_ALUMNO)===String(datos.idAlumno)&&
+    String(r.ID_MAESTRA||'').trim()===String(m.idMaestra||'').trim()&&
+    String(r.ESTADO).toUpperCase()!=='ELIMINADO'
+  );
+  if(!alumno) throw new Error('El alumno no pertenece a esta maestra.');
+
+  const notas=limpiarTexto(datos.notas||'');
+  const nombre=String(alumno.NOMBRE||'')+' '+String(alumno.APELLIDO||'');
+  const hojaAlumnos=obtenerHoja('ALUMNOS');
+  const hojaCumpleanos=obtenerHoja('CUMPLEANOS');
+  const existente=obtenerRegistrosConFila('CUMPLEANOS').find(r=>
+    String(r.ID_ALUMNO)===String(datos.idAlumno)&&
+    String(r.ID_MAESTRA)===String(m.idMaestra)
+  );
+
+  const lock=LockService.getScriptLock();
+  lock.waitLock(20000);
+  try{
+    hojaAlumnos.getRange(alumno.__fila,6).setValue(fecha);
+    if(existente){
+      hojaCumpleanos.getRange(existente.__fila,1,1,6).setValues([[
+        existente.ID_CUMPLEANOS||generarId('CUM'),
+        m.idMaestra,
+        String(datos.idAlumno),
+        nombre,
+        fecha,
+        notas
+      ]]);
+    }else{
+      hojaCumpleanos.appendRow([
+        generarId('CUM'),m.idMaestra,String(datos.idAlumno),nombre,fecha,notas
+      ]);
+    }
+  }finally{
+    lock.releaseLock();
+  }
+
+  registrarAuditoria(m.idMaestra,'GUARDAR','CUMPLEANOS','Cumpleaños configurado: '+nombre);
+  return {
+    idAlumno:String(datos.idAlumno),
+    nombre:String(alumno.NOMBRE||''),
+    apellido:String(alumno.APELLIDO||''),
+    sexo:String(alumno.SEXO||''),
+    grado:String(alumno.GRADO||''),
+    seccion:String(alumno.SECCION||''),
+    fechaNacimiento:fecha,
+    notas:notas
+  };
+}
+
+function eliminarCumpleanos(token,datos){
+  const m=verificarSesion(token);
+  validarObjeto(datos,['idAlumno']);
+  const alumno=obtenerRegistrosConFila('ALUMNOS').find(r=>
+    String(r.ID_ALUMNO)===String(datos.idAlumno)&&
+    String(r.ID_MAESTRA||'').trim()===String(m.idMaestra||'').trim()&&
+    String(r.ESTADO).toUpperCase()!=='ELIMINADO'
+  );
+  if(!alumno) throw new Error('El alumno no pertenece a esta maestra.');
+
+  const hojaCumpleanos=obtenerHoja('CUMPLEANOS');
+  const filas=obtenerRegistrosConFila('CUMPLEANOS')
+    .filter(r=>String(r.ID_ALUMNO)===String(datos.idAlumno)&&String(r.ID_MAESTRA)===String(m.idMaestra))
+    .map(r=>r.__fila)
+    .sort((a,b)=>b-a);
+
+  const lock=LockService.getScriptLock();
+  lock.waitLock(20000);
+  try{
+    obtenerHoja('ALUMNOS').getRange(alumno.__fila,6).clearContent();
+    filas.forEach(fila=>hojaCumpleanos.deleteRow(fila));
+  }finally{
+    lock.releaseLock();
+  }
+
+  registrarAuditoria(m.idMaestra,'ELIMINAR','CUMPLEANOS','Fecha de cumpleaños eliminada');
+  return {eliminado:true,idAlumno:String(datos.idAlumno)};
+}
+
+function normalizarFechaCumpleanos(valor){
+  if(!valor) throw new Error('La fecha de nacimiento es obligatoria.');
+  if(Object.prototype.toString.call(valor)==='[object Date]'&&!Number.isNaN(valor.getTime())){
+    return Utilities.formatDate(valor,Session.getScriptTimeZone(),'yyyy-MM-dd');
+  }
+  const texto=String(valor).trim();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(texto)) throw new Error('La fecha de nacimiento no es válida.');
+  const partes=texto.split('-').map(Number);
+  const fecha=new Date(partes[0],partes[1]-1,partes[2]);
+  if(
+    fecha.getFullYear()!==partes[0]||
+    fecha.getMonth()!==partes[1]-1||
+    fecha.getDate()!==partes[2]
+  ) throw new Error('La fecha de nacimiento no es válida.');
+  if(fecha.getTime()>Date.now()) throw new Error('La fecha de nacimiento no puede estar en el futuro.');
+  return texto;
+}
+
+
+function listarReuniones(token){
+  const m=verificarSesion(token);
+  return obtenerRegistros('REUNIONES')
+    .filter(r=>String(r.ID_MAESTRA)===String(m.idMaestra))
+    .map(r=>({
+      idReunion:String(r.ID_REUNION||''),
+      titulo:String(r.TITULO||''),
+      fecha:formatearFechaParaFormulario(r.FECHA),
+      hora:formatearHoraReunion(r.HORA),
+      lugar:String(r.LUGAR||''),
+      participantes:String(r.PARTICIPANTES||''),
+      temas:String(r.TEMAS||''),
+      acuerdos:String(r.ACUERDOS||''),
+      estado:String(r.ESTADO||'PROGRAMADA').toUpperCase()
+    }))
+    .sort((a,b)=>{
+      const fechaA=String(a.fecha)+' '+String(a.hora);
+      const fechaB=String(b.fecha)+' '+String(b.hora);
+      return fechaB.localeCompare(fechaA)||a.titulo.localeCompare(b.titulo);
+    });
+}
+
+function guardarReunion(token,datos){
+  const m=verificarSesion(token);
+  validarObjeto(datos,['titulo','fecha','hora','participantes','temas']);
+  const estadosPermitidos=['PROGRAMADA','REALIZADA','CANCELADA'];
+  const estado=limpiarTexto(datos.estado||'PROGRAMADA').toUpperCase();
+  if(!estadosPermitidos.includes(estado)) throw new Error('El estado de la reunión no es válido.');
+
+  const fecha=normalizarFechaReunion(datos.fecha);
+  const hora=normalizarHoraReunion(datos.hora);
+  const hoja=obtenerHoja('REUNIONES');
+  const idSolicitado=limpiarTexto(datos.idReunion||'');
+  const registro={
+    idReunion:idSolicitado||generarId('REU'),
+    titulo:limpiarTexto(datos.titulo),
+    fecha:fecha,
+    hora:hora,
+    lugar:limpiarTexto(datos.lugar||''),
+    participantes:limpiarTexto(datos.participantes),
+    temas:limpiarTexto(datos.temas),
+    acuerdos:limpiarTexto(datos.acuerdos||''),
+    estado:estado
+  };
+
+  const lock=LockService.getScriptLock();
+  lock.waitLock(20000);
+  try{
+    if(idSolicitado){
+      const existente=obtenerRegistrosConFila('REUNIONES').find(r=>
+        String(r.ID_REUNION)===idSolicitado&&String(r.ID_MAESTRA)===String(m.idMaestra)
+      );
+      if(!existente) throw new Error('No se encontró la reunión o no tienes permiso.');
+      hoja.getRange(existente.__fila,1,1,10).setValues([[
+        registro.idReunion,m.idMaestra,registro.titulo,registro.fecha,registro.hora,
+        registro.lugar,registro.participantes,registro.temas,registro.acuerdos,registro.estado
+      ]]);
+      registrarAuditoria(m.idMaestra,'EDITAR','REUNIONES','Reunión actualizada: '+registro.titulo);
+    }else{
+      hoja.appendRow([
+        registro.idReunion,m.idMaestra,registro.titulo,registro.fecha,registro.hora,
+        registro.lugar,registro.participantes,registro.temas,registro.acuerdos,registro.estado
+      ]);
+      registrarAuditoria(m.idMaestra,'CREAR','REUNIONES','Reunión creada: '+registro.titulo);
+    }
+  }finally{
+    lock.releaseLock();
+  }
+  return registro;
+}
+
+function eliminarReunion(token,datos){
+  const m=verificarSesion(token);
+  validarObjeto(datos,['idReunion']);
+  const hoja=obtenerHoja('REUNIONES');
+  const existente=obtenerRegistrosConFila('REUNIONES').find(r=>
+    String(r.ID_REUNION)===String(datos.idReunion)&&String(r.ID_MAESTRA)===String(m.idMaestra)
+  );
+  if(!existente) throw new Error('No se encontró la reunión o no tienes permiso.');
+  hoja.deleteRow(existente.__fila);
+  registrarAuditoria(m.idMaestra,'ELIMINAR','REUNIONES','Reunión eliminada');
+  return {eliminado:true,idReunion:String(datos.idReunion)};
+}
+
+function normalizarFechaReunion(valor){
+  if(!valor) throw new Error('La fecha es obligatoria.');
+  if(Object.prototype.toString.call(valor)==='[object Date]'&&!Number.isNaN(valor.getTime())){
+    return Utilities.formatDate(valor,Session.getScriptTimeZone(),'yyyy-MM-dd');
+  }
+  const texto=String(valor).trim();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(texto)) throw new Error('La fecha no es válida.');
+  const partes=texto.split('-').map(Number);
+  const fecha=new Date(partes[0],partes[1]-1,partes[2]);
+  if(fecha.getFullYear()!==partes[0]||fecha.getMonth()!==partes[1]-1||fecha.getDate()!==partes[2]){
+    throw new Error('La fecha no es válida.');
+  }
+  return texto;
+}
+
+function normalizarHoraReunion(valor){
+  const texto=String(valor||'').trim();
+  if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(texto)) throw new Error('La hora no es válida.');
+  return texto;
+}
+
+function formatearHoraReunion(valor){
+  if(!valor) return '';
+  if(Object.prototype.toString.call(valor)==='[object Date]'&&!Number.isNaN(valor.getTime())){
+    return Utilities.formatDate(valor,Session.getScriptTimeZone(),'HH:mm');
+  }
+  const texto=String(valor).trim();
+  const coincidencia=texto.match(/(?:T|\s)(\d{2}:\d{2})/);
+  return coincidencia?coincidencia[1]:texto.slice(0,5);
+}
+
+
+function obtenerRegistrosAgenda(){
+  const hoja=obtenerHoja('AGENDA');
+  const ultimaFila=hoja.getLastRow();
+  const ultimaColumna=hoja.getLastColumn();
+
+  if(ultimaFila<2||ultimaColumna<1)return[];
+
+  const valores=hoja.getRange(1,1,ultimaFila,ultimaColumna).getValues();
+  const visibles=hoja.getRange(1,1,ultimaFila,ultimaColumna).getDisplayValues();
+  const encabezados=valores[0].map(x=>String(x).trim());
+
+  return valores.slice(1).map((fila,i)=>{
+    const registro={__fila:i+2};
+    encabezados.forEach((encabezado,j)=>{
+      if(encabezado==='FECHA'||encabezado==='HORA'){
+        registro[encabezado]=String(visibles[i+1][j]||'').trim();
+      }else{
+        registro[encabezado]=fila[j];
+      }
+    });
+    return registro;
+  }).filter(registro=>
+    encabezados.some(encabezado=>String(registro[encabezado]||'').trim()!=='')
+  );
+}
+
+function guardarFilaAgendaComoTexto(hoja,fila,valores){
+  hoja.getRange(fila,1,1,9).setValues([valores]);
+  hoja.getRange(fila,5,1,2).setNumberFormat('@');
+  hoja.getRange(fila,5).setValue(String(valores[4]||''));
+  hoja.getRange(fila,6).setValue(String(valores[5]||''));
+}
+
+
+function listarAgenda(token){
+  const m=verificarSesion(token);
+  return obtenerRegistrosAgenda()
+    .filter(r=>String(r.ID_MAESTRA||'').trim()===String(m.idMaestra||'').trim())
+    .map(r=>({
+      idEvento:String(r.ID_EVENTO||''),
+      titulo:String(r.TITULO||''),
+      tipo:String(r.TIPO||'OTRO').toUpperCase(),
+      fecha:normalizarFechaVisibleAgenda(r.FECHA),
+      hora:normalizarHoraVisibleAgenda(r.HORA),
+      descripcion:String(r.DESCRIPCION||''),
+      estado:String(r.ESTADO||'PENDIENTE').toUpperCase(),
+      fechaRegistro:formatearFechaParaFormulario(r.FECHA_REGISTRO)
+    }))
+    .sort((a,b)=>{
+      const fechaA=String(a.fecha)+' '+String(a.hora);
+      const fechaB=String(b.fecha)+' '+String(b.hora);
+      return fechaA.localeCompare(fechaB)||a.titulo.localeCompare(b.titulo);
+    });
+}
+
+function guardarEventoAgenda(token,datos){
+  const m=verificarSesion(token);
+  validarObjeto(datos,['titulo','tipo','fecha','hora','estado']);
+  const tiposPermitidos=['CLASE','ACTIVIDAD','RECORDATORIO','ENTREGA','OTRO'];
+  const estadosPermitidos=['PENDIENTE','COMPLETADO','CANCELADO'];
+  const tipo=limpiarTexto(datos.tipo).toUpperCase();
+  const estado=limpiarTexto(datos.estado).toUpperCase();
+  if(!tiposPermitidos.includes(tipo)) throw new Error('El tipo de evento no es válido.');
+  if(!estadosPermitidos.includes(estado)) throw new Error('El estado del evento no es válido.');
+
+  const fecha=normalizarFechaAgenda(datos.fecha);
+  const hora=normalizarHoraAgenda(datos.hora);
+  const hoja=obtenerHoja('AGENDA');
+  const idSolicitado=limpiarTexto(datos.idEvento||'');
+  const registro={
+    idEvento:idSolicitado||generarId('AGE'),
+    titulo:limpiarTexto(datos.titulo),
+    tipo:tipo,
+    fecha:fecha,
+    hora:hora,
+    descripcion:limpiarTexto(datos.descripcion||''),
+    estado:estado,
+    fechaRegistro:new Date()
+  };
+
+  const lock=LockService.getScriptLock();
+  lock.waitLock(20000);
+  try{
+    if(idSolicitado){
+      const existente=obtenerRegistrosConFila('AGENDA').find(r=>
+        String(r.ID_EVENTO)===idSolicitado&&String(r.ID_MAESTRA)===String(m.idMaestra)
+      );
+      if(!existente) throw new Error('No se encontró el evento o no tienes permiso.');
+      registro.fechaRegistro=existente.FECHA_REGISTRO||new Date();
+      guardarFilaAgendaComoTexto(hoja,existente.__fila,[
+        registro.idEvento,m.idMaestra,registro.titulo,registro.tipo,registro.fecha,
+        registro.hora,registro.descripcion,registro.estado,registro.fechaRegistro
+      ]);
+      registrarAuditoria(m.idMaestra,'EDITAR','AGENDA','Evento actualizado: '+registro.titulo);
+    }else{
+      const nuevaFila=hoja.getLastRow()+1;
+      guardarFilaAgendaComoTexto(hoja,nuevaFila,[
+        registro.idEvento,m.idMaestra,registro.titulo,registro.tipo,registro.fecha,
+        registro.hora,registro.descripcion,registro.estado,registro.fechaRegistro
+      ]);
+      registrarAuditoria(m.idMaestra,'CREAR','AGENDA','Evento creado: '+registro.titulo);
+    }
+  }finally{
+    lock.releaseLock();
+  }
+  return {
+    idEvento:registro.idEvento,
+    titulo:registro.titulo,
+    tipo:registro.tipo,
+    fecha:registro.fecha,
+    hora:registro.hora,
+    descripcion:registro.descripcion,
+    estado:registro.estado,
+    fechaRegistro:formatearFechaParaFormulario(registro.fechaRegistro)
+  };
+}
+
+function eliminarEventoAgenda(token,datos){
+  const m=verificarSesion(token);
+  validarObjeto(datos,['idEvento']);
+  const hoja=obtenerHoja('AGENDA');
+  const existente=obtenerRegistrosConFila('AGENDA').find(r=>
+    String(r.ID_EVENTO)===String(datos.idEvento)&&String(r.ID_MAESTRA)===String(m.idMaestra)
+  );
+  if(!existente) throw new Error('No se encontró el evento o no tienes permiso.');
+  hoja.deleteRow(existente.__fila);
+  registrarAuditoria(m.idMaestra,'ELIMINAR','AGENDA','Evento eliminado');
+  return {eliminado:true,idEvento:String(datos.idEvento)};
+}
+
+function normalizarFechaVisibleAgenda(valor){
+  const texto=String(valor||'').trim();
+  if(!texto)return '';
+
+  if(/^\d{4}-\d{2}-\d{2}$/.test(texto))return texto;
+
+  const latino=texto.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if(latino){
+    return [
+      latino[3],
+      String(latino[2]).padStart(2,'0'),
+      String(latino[1]).padStart(2,'0')
+    ].join('-');
+  }
+
+  return normalizarFechaAgenda(texto);
+}
+
+function normalizarHoraVisibleAgenda(valor){
+  const texto=String(valor||'').trim();
+  if(!texto)return '';
+
+  const coincidencia=texto.match(/(\d{1,2}):(\d{2})/);
+  if(!coincidencia)return texto;
+
+  return String(coincidencia[1]).padStart(2,'0')+':'+coincidencia[2];
+}
+
+
+function normalizarFechaAgenda(valor){
+  if(!valor) throw new Error('La fecha es obligatoria.');
+  if(Object.prototype.toString.call(valor)==='[object Date]'&&!Number.isNaN(valor.getTime())){
+    return Utilities.formatDate(valor,Session.getScriptTimeZone(),'yyyy-MM-dd');
+  }
+  const texto=String(valor).trim();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(texto)) throw new Error('La fecha no es válida.');
+  const partes=texto.split('-').map(Number);
+  const fecha=new Date(partes[0],partes[1]-1,partes[2]);
+  if(fecha.getFullYear()!==partes[0]||fecha.getMonth()!==partes[1]-1||fecha.getDate()!==partes[2]){
+    throw new Error('La fecha no es válida.');
+  }
+  return texto;
+}
+
+function normalizarHoraAgenda(valor){
+  const texto=String(valor||'').trim();
+  if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(texto)) throw new Error('La hora no es válida.');
+  return texto;
+}
+
+function formatearHoraAgenda(valor){
+  if(!valor) return '';
+  if(Object.prototype.toString.call(valor)==='[object Date]'&&!Number.isNaN(valor.getTime())){
+    return Utilities.formatDate(valor,Session.getScriptTimeZone(),'HH:mm');
+  }
+  const texto=String(valor).trim();
+  const coincidencia=texto.match(/(?:T|\s)(\d{2}:\d{2})/);
+  return coincidencia?coincidencia[1]:texto.slice(0,5);
+}
+
+function configurarBotTelegram(){
+  const ui=SpreadsheetApp.getUi();
+  const tokenRespuesta=ui.prompt('Configurar bot Telegram','Pega el token entregado por BotFather:',ui.ButtonSet.OK_CANCEL);
+  if(tokenRespuesta.getSelectedButton()!==ui.Button.OK)return;
+  const token=String(tokenRespuesta.getResponseText()||'').trim();
+  if(!/^\d+:[A-Za-z0-9_-]{20,}$/.test(token)){
+    ui.alert('El token no parece válido. Cópialo completo desde BotFather.');
+    return;
+  }
+
+  const usuarioRespuesta=ui.prompt('Configurar bot Telegram','Escribe el usuario del bot, por ejemplo: AulaMagicaBot',ui.ButtonSet.OK_CANCEL);
+  if(usuarioRespuesta.getSelectedButton()!==ui.Button.OK)return;
+  const usuario=normalizarUsuarioTelegram(usuarioRespuesta.getResponseText());
+  if(!usuario){
+    ui.alert('El nombre de usuario del bot es obligatorio.');
+    return;
+  }
+
+  const propiedades=PropertiesService.getScriptProperties();
+  propiedades.setProperty('TELEGRAM_BOT_TOKEN',token);
+  propiedades.setProperty('TELEGRAM_BOT_USERNAME',usuario);
+
+  try{
+    const resultado=registrarWebhookTelegram();
+    establecerConfiguracion('TELEGRAM_ACTIVO','SI');
+    ui.alert('Telegram configurado','Bot @'+usuario+' conectado correctamente.\nWebhook: '+resultado.webhookUrl,ui.ButtonSet.OK);
+  }catch(error){
+    establecerConfiguracion('TELEGRAM_ACTIVO','NO');
+    ui.alert('El token se guardó, pero no se pudo activar el webhook: '+(error.message||error));
+  }
+}
+
+function reactivarWebhookTelegram(){
+  const ui=SpreadsheetApp.getUi();
+  try{
+    const resultado=registrarWebhookTelegram();
+    establecerConfiguracion('TELEGRAM_ACTIVO','SI');
+    ui.alert('Webhook activado correctamente:\n'+resultado.webhookUrl);
+  }catch(error){
+    ui.alert('No se pudo activar el webhook: '+(error.message||error));
+  }
+}
+
+function registrarWebhookTelegram(){
+  const token=obtenerTokenBotTelegram();
+  let webhookUrl=ScriptApp.getService().getUrl()||'';
+  if(!webhookUrl)throw new Error('Primero publica Apps Script como aplicación web.');
+  webhookUrl=webhookUrl.replace(/\/dev$/,'/exec');
+
+  const respuesta=UrlFetchApp.fetch('https://api.telegram.org/bot'+token+'/setWebhook',{
+    method:'post',
+    contentType:'application/json',
+    payload:JSON.stringify({url:webhookUrl,drop_pending_updates:true}),
+    muteHttpExceptions:true
+  });
+  const contenido=JSON.parse(respuesta.getContentText()||'{}');
+  if(!contenido.ok)throw new Error(contenido.description||'Telegram rechazó el webhook.');
+  configurarComandosTelegram();
+  return {webhookUrl:webhookUrl};
+}
+
+function establecerConfiguracion(clave,valor){
+  const hoja=obtenerHoja('CONFIGURACION');
+  const registros=obtenerRegistrosConFila('CONFIGURACION');
+  const existente=registros.find(r=>String(r.CLAVE)===String(clave));
+  if(existente)hoja.getRange(existente.__fila,2).setValue(valor);
+  else hoja.appendRow([clave,valor,'Configuración de Aula Mágica']);
+}
+
+function obtenerEstadoTelegram(token){
+  const m=verificarSesion(token);
+  return construirEstadoTelegram(m.idMaestra);
+}
+
+function construirEstadoTelegram(idMaestra){
+  const propiedades=PropertiesService.getScriptProperties();
+  const botToken=propiedades.getProperty('TELEGRAM_BOT_TOKEN')||'';
+  const botUsuario=normalizarUsuarioTelegram(propiedades.getProperty('TELEGRAM_BOT_USERNAME')||'');
+  const fila=obtenerRegistrosConFila('TELEGRAM').find(r=>String(r.ID_MAESTRA)===String(idMaestra));
+  const vinculado=Boolean(fila&&String(fila.ESTADO).toUpperCase()==='VINCULADO'&&String(fila.CHAT_ID||'').trim());
+  let codigo='';
+  let codigoExpira='';
+
+  if(fila&&String(fila.ESTADO).toUpperCase()==='PENDIENTE'){
+    const creado=new Date(fila.FECHA_VINCULACION);
+    const expira=new Date(creado.getTime()+30*60*1000);
+    if(!Number.isNaN(expira.getTime())&&expira.getTime()>Date.now()){
+      codigo=String(fila.CODIGO_VINCULACION||'');
+      codigoExpira=expira.toISOString();
+    }
+  }
+
+  return {
+    configurado:Boolean(botToken&&botUsuario),
+    botUsuario:botUsuario,
+    vinculado:vinculado,
+    chatId:vinculado?String(fila.CHAT_ID):'',
+    codigo:codigo,
+    codigoExpira:codigoExpira
+  };
+}
+
+function generarCodigoTelegram(token){
+  const m=verificarSesion(token);
+  const propiedades=PropertiesService.getScriptProperties();
+  if(!propiedades.getProperty('TELEGRAM_BOT_TOKEN')||!propiedades.getProperty('TELEGRAM_BOT_USERNAME')){
+    throw new Error('El bot todavía no está configurado por la administradora.');
+  }
+
+  const hoja=obtenerHoja('TELEGRAM');
+  const registros=obtenerRegistrosConFila('TELEGRAM');
+  const existente=registros.find(r=>String(r.ID_MAESTRA)===String(m.idMaestra));
+  const codigo=crearCodigoVinculacionTelegram(registros);
+  const ahora=new Date();
+
+  if(existente){
+    hoja.getRange(existente.__fila,1,1,5).setValues([[m.idMaestra,'',codigo,'PENDIENTE',ahora]]);
+  }else{
+    hoja.appendRow([m.idMaestra,'',codigo,'PENDIENTE',ahora]);
+  }
+
+  registrarAuditoria(m.idMaestra,'GENERAR','TELEGRAM','Código de vinculación generado');
+  return construirEstadoTelegram(m.idMaestra);
+}
+
+function crearCodigoVinculacionTelegram(registros){
+  const usados=registros.map(r=>String(r.CODIGO_VINCULACION||'').toUpperCase());
+  const caracteres='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let codigo='';
+  do{
+    codigo='';
+    for(let i=0;i<6;i++)codigo+=caracteres.charAt(Math.floor(Math.random()*caracteres.length));
+  }while(usados.includes(codigo));
+  return codigo;
+}
+
+function desvincularTelegram(token){
+  const m=verificarSesion(token);
+  const hoja=obtenerHoja('TELEGRAM');
+  const existente=obtenerRegistrosConFila('TELEGRAM').find(r=>String(r.ID_MAESTRA)===String(m.idMaestra));
+  if(existente)hoja.getRange(existente.__fila,1,1,5).setValues([[m.idMaestra,'','','DESVINCULADO',new Date()]]);
+  registrarAuditoria(m.idMaestra,'DESVINCULAR','TELEGRAM','Cuenta de Telegram desvinculada');
+  return construirEstadoTelegram(m.idMaestra);
+}
+
+function enviarPruebaTelegram(token){
+  const m=verificarSesion(token);
+  const registro=obtenerRegistros('TELEGRAM').find(r=>
+    String(r.ID_MAESTRA||'').trim()===String(m.idMaestra||'').trim()&&
+    String(r.ESTADO).toUpperCase()==='VINCULADO'&&
+    String(r.CHAT_ID||'').trim()
+  );
+  if(!registro)throw new Error('Primero debes vincular tu cuenta de Telegram.');
+  enviarMensajeTelegram(String(registro.CHAT_ID),'✨ Aula Mágica está conectada correctamente.\n\nYa puedes usar /agenda, /cumpleanos y /asistencia.');
+  return {enviado:true};
+}
+
+function procesarActualizacionTelegram(actualizacion){
+  const mensaje=actualizacion.message||(actualizacion.callback_query&&actualizacion.callback_query.message);
+  if(!mensaje||!mensaje.chat)return;
+  const chatId=String(mensaje.chat.id);
+  const textoOriginal=String(mensaje.text||'').trim();
+  if(!textoOriginal)return;
+
+  const texto=normalizarBotonTelegram(textoOriginal);
+  const partes=texto.split(/\s+/);
+  const comando=String(partes[0]||'').split('@')[0].toLowerCase();
+
+  if(comando==='/start'){
+    enviarMensajeTelegram(chatId,'👋 Bienvenida a Aula Mágica.\n\nPara vincular tu cuenta, genera un código en la plataforma y envía:\n/vincular CODIGO\n\nDespués podrás usar los botones del menú.',true);
+    return;
+  }
+
+  if(comando==='/vincular'){
+    vincularChatTelegram(chatId,String(partes[1]||'').toUpperCase());
+    return;
+  }
+
+  const enlace=obtenerRegistros('TELEGRAM').find(r=>
+    String(r.CHAT_ID)===chatId&&String(r.ESTADO).toUpperCase()==='VINCULADO'
+  );
+  if(!enlace){
+    enviarMensajeTelegram(chatId,'🔒 Esta cuenta no está vinculada. Abre Aula Mágica, entra en Telegram y genera un código.');
+    return;
+  }
+
+  const idMaestra=String(enlace.ID_MAESTRA);
+  if(comando==='/inicio'){
+    const maestra=obtenerRegistros('MAESTRAS').find(r=>String(r.ID_MAESTRA)===idMaestra);
+    enviarMensajeTelegram(chatId,'✨ Aula Mágica conectada\nMaestra: '+(maestra?String(maestra.NOMBRE)+' '+String(maestra.APELLIDO):'Cuenta vinculada')+'\n\nElige una opción del menú.',true);
+  }else if(comando==='/alumnos'){
+    enviarMensajeTelegram(chatId,crearResumenAlumnosTelegram(idMaestra),true);
+  }else if(comando==='/agenda'){
+    enviarMensajeTelegram(chatId,crearResumenAgendaTelegram(idMaestra),true);
+  }else if(comando==='/cumpleanos'){
+    enviarMensajeTelegram(chatId,crearResumenCumpleanosTelegram(idMaestra),true);
+  }else if(comando==='/asistencia'){
+    enviarMensajeTelegram(chatId,crearResumenAsistenciaTelegram(idMaestra),true);
+  }else if(comando==='/notas'){
+    enviarMensajeTelegram(chatId,crearResumenCalificacionesTelegram(idMaestra),true);
+  }else if(comando==='/planes'){
+    enviarMensajeTelegram(chatId,crearResumenPlanificacionesTelegram(idMaestra),true);
+  }else if(comando==='/reuniones'){
+    enviarMensajeTelegram(chatId,crearResumenReunionesTelegram(idMaestra),true);
+  }else if(comando==='/ayuda'){
+    enviarMensajeTelegram(chatId,'📱 Opciones de Aula Mágica\n\n/alumnos — Total de estudiantes\n/asistencia — Resumen de hoy\n/notas — Resumen de calificaciones\n/planes — Próximas planificaciones\n/cumpleanos — Próximos cumpleaños\n/reuniones — Próximas reuniones\n/agenda — Próximos eventos\n/inicio — Estado de la cuenta',true);
+  }else{
+    enviarMensajeTelegram(chatId,'No reconozco esa opción. Usa los botones o escribe /ayuda.',true);
+  }
+}
+
+function normalizarBotonTelegram(texto){
+  const limpio=String(texto||'').trim().toLowerCase();
+  const mapa={
+    '🏠 inicio':'/inicio',
+    '👩‍🎓 alumnos':'/alumnos',
+    '✅ asistencia':'/asistencia',
+    '📝 notas':'/notas',
+    '📚 planes':'/planes',
+    '🎂 cumpleaños':'/cumpleanos',
+    '🤝 reuniones':'/reuniones',
+    '📅 agenda':'/agenda',
+    '❓ ayuda':'/ayuda'
+  };
+  return mapa[limpio]||String(texto||'').trim();
+}
+
+function vincularChatTelegram(chatId,codigo){
+  if(!codigo){
+    enviarMensajeTelegram(chatId,'Debes enviar el código así:\n/vincular ABC123');
+    return;
+  }
+  const hoja=obtenerHoja('TELEGRAM');
+  const registro=obtenerRegistrosConFila('TELEGRAM').find(r=>
+    String(r.CODIGO_VINCULACION||'').toUpperCase()===codigo&&String(r.ESTADO).toUpperCase()==='PENDIENTE'
+  );
+  if(!registro){
+    enviarMensajeTelegram(chatId,'❌ El código no existe o ya fue utilizado. Genera uno nuevo en Aula Mágica.');
+    return;
+  }
+  const creado=new Date(registro.FECHA_VINCULACION);
+  if(Number.isNaN(creado.getTime())||Date.now()-creado.getTime()>30*60*1000){
+    enviarMensajeTelegram(chatId,'⌛ El código venció. Genera uno nuevo en Aula Mágica.');
+    return;
+  }
+
+  const otro=obtenerRegistrosConFila('TELEGRAM').find(r=>
+    String(r.CHAT_ID)===chatId&&String(r.ID_MAESTRA)!==String(registro.ID_MAESTRA)
+  );
+  if(otro)hoja.getRange(otro.__fila,2,1,4).setValues([['','','DESVINCULADO',new Date()]]);
+
+  hoja.getRange(registro.__fila,1,1,5).setValues([[
+    registro.ID_MAESTRA,chatId,'','VINCULADO',new Date()
+  ]]);
+  registrarAuditoria(String(registro.ID_MAESTRA),'VINCULAR','TELEGRAM','Cuenta de Telegram vinculada');
+  enviarMensajeTelegram(chatId,'✅ Cuenta vinculada correctamente con Aula Mágica.\n\nYa puedes usar los botones del menú.',true);
+}
+
+function crearResumenAlumnosTelegram(idMaestra){
+  const alumnos=obtenerRegistros('ALUMNOS').filter(r=>
+    String(r.ID_MAESTRA)===String(idMaestra)&&
+    String(r.ESTADO).toUpperCase()!=='ELIMINADO'
+  );
+
+  if(!alumnos.length)return '👩‍🎓 Todavía no tienes alumnos registrados.';
+
+  const ninas=alumnos.filter(r=>String(r.SEXO||'').toLowerCase()==='femenino').length;
+  const ninos=alumnos.filter(r=>String(r.SEXO||'').toLowerCase()==='masculino').length;
+  const sinDefinir=alumnos.length-ninas-ninos;
+
+  const lista=alumnos
+    .slice()
+    .sort((a,b)=>(String(a.NOMBRE||'')+' '+String(a.APELLIDO||'')).localeCompare(
+      String(b.NOMBRE||'')+' '+String(b.APELLIDO||'')
+    ))
+    .slice(0,10)
+    .map((r,i)=>
+      (i+1)+'. '+String(r.NOMBRE||'')+' '+String(r.APELLIDO||'')+
+      (r.GRADO?' · '+String(r.GRADO):'')+
+      (r.SECCION?' '+String(r.SECCION):'')
+    );
+
+  const extra=alumnos.length>10?'\n\n…y '+(alumnos.length-10)+' alumno(s) más.':'';
+
+  return [
+    '👩‍🎓 Alumnos del curso',
+    '',
+    'Total: '+alumnos.length,
+    '👧 Niñas: '+ninas,
+    '👦 Niños: '+ninos,
+    sinDefinir>0?'❔ Sin definir: '+sinDefinir:'',
+    '',
+    lista.join('\n')
+  ].filter(Boolean).join('\n')+extra;
+}
+
+function crearResumenCalificacionesTelegram(idMaestra){
+  const registros=obtenerRegistros('CALIFICACIONES').filter(r=>
+    String(r.ID_MAESTRA)===String(idMaestra)
+  );
+
+  if(!registros.length)return '📝 Todavía no hay calificaciones registradas.';
+
+  const porcentajes=registros.map(r=>{
+    const nota=Number(r.CALIFICACION||0);
+    const maxima=Number(r.CALIFICACION_MAXIMA||0);
+    return maxima>0?(nota/maxima)*100:null;
+  }).filter(v=>v!==null&&Number.isFinite(v));
+
+  const promedio=porcentajes.length
+    ?Math.round(porcentajes.reduce((a,b)=>a+b,0)/porcentajes.length)
+    :0;
+
+  const materias={};
+  registros.forEach(r=>{
+    const materia=String(r.ASIGNATURA||'Sin asignatura');
+    materias[materia]=(materias[materia]||0)+1;
+  });
+
+  const principales=Object.keys(materias)
+    .sort((a,b)=>materias[b]-materias[a])
+    .slice(0,5);
+
+  const alumnos={};
+  obtenerRegistros('ALUMNOS').forEach(r=>{
+    if(String(r.ID_MAESTRA)===String(idMaestra)){
+      alumnos[String(r.ID_ALUMNO)]=(String(r.NOMBRE||'')+' '+String(r.APELLIDO||'')).trim();
+    }
+  });
+
+  const ultimas=registros
+    .slice()
+    .sort((a,b)=>normalizarFechaTextoTelegram(b.FECHA).localeCompare(normalizarFechaTextoTelegram(a.FECHA)))
+    .slice(0,5)
+    .map(r=>{
+      const nota=Number(r.CALIFICACION||0);
+      const maxima=Number(r.CALIFICACION_MAXIMA||0);
+      const porcentaje=maxima>0?Math.round((nota/maxima)*100):0;
+      return '• '+(alumnos[String(r.ID_ALUMNO)]||'Alumno')+
+        ' · '+String(r.ASIGNATURA||'Sin asignatura')+
+        ' · '+nota+'/'+maxima+' ('+porcentaje+'%)';
+    });
+
+  return [
+    '📝 Calificaciones',
+    '',
+    'Registros: '+registros.length,
+    'Promedio general: '+promedio+'%',
+    'Materias: '+(principales.join(', ')||'—'),
+    '',
+    'Últimas calificaciones:',
+    ultimas.join('\n')
+  ].join('\n');
+}
+
+function crearResumenPlanificacionesTelegram(idMaestra){
+  const hoy=Utilities.formatDate(new Date(),obtenerZonaHorariaAulaMagica(),'yyyy-MM-dd');
+  const planes=obtenerRegistros('PLANIFICACION')
+    .filter(r=>
+      String(r.ID_MAESTRA)===String(idMaestra)&&
+      String(r.ESTADO).toUpperCase()!=='COMPLETADA'&&
+      normalizarFechaTextoTelegram(r.FECHA)>=hoy
+    )
+    .map(r=>({
+      titulo:String(r.TITULO||''),
+      asignatura:String(r.ASIGNATURA||''),
+      grado:String(r.GRADO||''),
+      objetivo:String(r.OBJETIVO||''),
+      fecha:normalizarFechaTextoTelegram(r.FECHA)
+    }))
+    .sort((a,b)=>a.fecha.localeCompare(b.fecha))
+    .slice(0,5);
+
+  if(!planes.length)return '📚 No tienes planificaciones próximas pendientes.';
+
+  return '📚 Próximas planificaciones\n\n'+planes.map(p=>{
+    const partes=[
+      '• '+formatearFechaTelegram(p.fecha)+' — '+p.titulo,
+      p.asignatura?'  📘 '+p.asignatura:'',
+      p.grado?'  🎓 '+p.grado:'',
+      p.objetivo?'  🎯 '+recortarTextoTelegram(p.objetivo,90):''
+    ].filter(Boolean);
+    return partes.join('\n');
+  }).join('\n\n');
+}
+
+function crearResumenReunionesTelegram(idMaestra){
+  const hoy=Utilities.formatDate(new Date(),obtenerZonaHorariaAulaMagica(),'yyyy-MM-dd');
+  const reuniones=obtenerRegistros('REUNIONES')
+    .filter(r=>
+      String(r.ID_MAESTRA)===String(idMaestra)&&
+      String(r.ESTADO).toUpperCase()!=='REALIZADA'&&
+      String(r.ESTADO).toUpperCase()!=='CANCELADA'&&
+      normalizarFechaTextoTelegram(r.FECHA)>=hoy
+    )
+    .map(r=>({
+      titulo:String(r.TITULO||''),
+      fecha:normalizarFechaTextoTelegram(r.FECHA),
+      hora:formatearHoraAgenda(r.HORA),
+      lugar:String(r.LUGAR||''),
+      participantes:String(r.PARTICIPANTES||''),
+      temas:String(r.TEMAS||'')
+    }))
+    .sort((a,b)=>(a.fecha+' '+a.hora).localeCompare(b.fecha+' '+b.hora))
+    .slice(0,5);
+
+  if(!reuniones.length)return '🤝 No tienes reuniones próximas.';
+
+  return '🤝 Próximas reuniones\n\n'+reuniones.map(r=>{
+    const lineas=[
+      '• '+formatearFechaTelegram(r.fecha)+' '+(r.hora||'')+' — '+r.titulo,
+      r.lugar?'  📍 '+r.lugar:'',
+      r.participantes?'  👥 '+recortarTextoTelegram(r.participantes,80):'',
+      r.temas?'  📝 '+recortarTextoTelegram(r.temas,100):''
+    ].filter(Boolean);
+    return lineas.join('\n');
+  }).join('\n\n');
+}
+
+function crearResumenAgendaTelegram(idMaestra){
+  const hoy=Utilities.formatDate(new Date(),obtenerZonaHorariaAulaMagica(),'yyyy-MM-dd');
+  const eventos=obtenerRegistros('AGENDA')
+    .filter(r=>
+      String(r.ID_MAESTRA)===String(idMaestra)&&
+      String(r.ESTADO).toUpperCase()==='PENDIENTE'&&
+      normalizarFechaTextoTelegram(r.FECHA)>=hoy
+    )
+    .map(r=>({
+      titulo:String(r.TITULO||''),
+      tipo:String(r.TIPO||'OTRO'),
+      fecha:normalizarFechaTextoTelegram(r.FECHA),
+      hora:formatearHoraAgenda(r.HORA),
+      descripcion:String(r.DESCRIPCION||'')
+    }))
+    .sort((a,b)=>(a.fecha+' '+a.hora).localeCompare(b.fecha+' '+b.hora))
+    .slice(0,5);
+
+  if(!eventos.length)return '📅 No tienes eventos pendientes en la agenda.';
+
+  return '📅 Próximos eventos\n\n'+eventos.map(e=>{
+    const lineas=[
+      '• '+formatearFechaTelegram(e.fecha)+' '+(e.hora||'')+' — '+e.titulo,
+      e.tipo?'  🏷️ '+capitalizarTelegram(e.tipo):'',
+      e.descripcion?'  📝 '+recortarTextoTelegram(e.descripcion,110):''
+    ].filter(Boolean);
+    return lineas.join('\n');
+  }).join('\n\n');
+}
+
+function crearResumenCumpleanosTelegram(idMaestra){
+  const hoy=new Date();
+  hoy.setHours(0,0,0,0);
+
+  const alumnos=obtenerRegistros('ALUMNOS')
+    .filter(r=>
+      String(r.ID_MAESTRA)===String(idMaestra)&&
+      String(r.ESTADO).toUpperCase()!=='ELIMINADO'&&
+      r.FECHA_NACIMIENTO
+    )
+    .map(r=>{
+      const texto=formatearFechaParaFormulario(r.FECHA_NACIMIENTO);
+      const p=texto.split('-').map(Number);
+      let proximo=new Date(hoy.getFullYear(),p[1]-1,p[2]);
+      if(proximo<hoy)proximo=new Date(hoy.getFullYear()+1,p[1]-1,p[2]);
+      const dias=Math.round((proximo.getTime()-hoy.getTime())/86400000);
+      return {
+        nombre:String(r.NOMBRE||'')+' '+String(r.APELLIDO||''),
+        proximo:proximo,
+        dias:dias,
+        edad:proximo.getFullYear()-p[0]
+      };
+    })
+    .filter(x=>!Number.isNaN(x.proximo.getTime()))
+    .sort((a,b)=>a.proximo.getTime()-b.proximo.getTime())
+    .slice(0,5);
+
+  if(!alumnos.length)return '🎂 No hay cumpleaños configurados.';
+
+  return '🎂 Próximos cumpleaños\n\n'+alumnos.map(a=>{
+    const cuando=a.dias===0?'hoy':(a.dias===1?'mañana':'en '+a.dias+' días');
+    return '• '+Utilities.formatDate(a.proximo,Session.getScriptTimeZone(),'dd/MM')+
+      ' — '+a.nombre+'\n  🎈 '+capitalizarTelegram(cuando)+' · Cumple '+a.edad+' años';
+  }).join('\n\n');
+}
+
+function crearResumenAsistenciaTelegram(idMaestra){
+  const hoy=Utilities.formatDate(new Date(),obtenerZonaHorariaAulaMagica(),'yyyy-MM-dd');
+  const registros=obtenerRegistros('ASISTENCIA').filter(r=>
+    String(r.ID_MAESTRA)===String(idMaestra)&&
+    normalizarFechaTextoTelegram(r.FECHA)===hoy
+  );
+
+  if(!registros.length)return '📋 Todavía no se ha guardado la asistencia de hoy.';
+
+  const conteo={PRESENTE:0,AUSENTE:0,TARDE:0,JUSTIFICADO:0};
+  registros.forEach(r=>{
+    const estado=String(r.ESTADO||'').toUpperCase();
+    if(conteo[estado]!==undefined)conteo[estado]++;
+  });
+
+  const alumnos={};
+  obtenerRegistros('ALUMNOS').forEach(r=>{
+    if(String(r.ID_MAESTRA)===String(idMaestra)){
+      alumnos[String(r.ID_ALUMNO)]=(String(r.NOMBRE||'')+' '+String(r.APELLIDO||'')).trim();
+    }
+  });
+
+  const ausentes=registros
+    .filter(r=>String(r.ESTADO||'').toUpperCase()==='AUSENTE')
+    .map(r=>alumnos[String(r.ID_ALUMNO)]||'Alumno')
+    .slice(0,5);
+
+  const tardanzas=registros
+    .filter(r=>String(r.ESTADO||'').toUpperCase()==='TARDE')
+    .map(r=>alumnos[String(r.ID_ALUMNO)]||'Alumno')
+    .slice(0,5);
+
+  const detalle=[];
+  if(ausentes.length)detalle.push('Ausentes: '+ausentes.join(', '));
+  if(tardanzas.length)detalle.push('Tardanzas: '+tardanzas.join(', '));
+
+  return [
+    '✅ Asistencia de hoy',
+    '',
+    '🟢 Presentes: '+conteo.PRESENTE,
+    '🔴 Ausentes: '+conteo.AUSENTE,
+    '⏰ Tardanzas: '+conteo.TARDE,
+    '📄 Justificados: '+conteo.JUSTIFICADO,
+    '',
+    detalle.join('\n')
+  ].filter(Boolean).join('\n');
+}
+
+
+function formatearFechaTelegram(valor){
+  const normalizada=normalizarFechaTextoTelegram(valor);
+  if(!normalizada)return 'Sin fecha';
+  const partes=normalizada.split('-');
+  if(partes.length!==3)return normalizada;
+  return partes[2]+'/'+partes[1]+'/'+partes[0];
+}
+
+function recortarTextoTelegram(valor,maximo){
+  const texto=String(valor||'').trim();
+  const limite=Number(maximo||100);
+  if(texto.length<=limite)return texto;
+  return texto.slice(0,Math.max(0,limite-1)).trim()+'…';
+}
+
+function capitalizarTelegram(valor){
+  const texto=String(valor||'').trim().toLowerCase();
+  return texto?texto.charAt(0).toUpperCase()+texto.slice(1):'';
+}
+
+function normalizarFechaTextoTelegram(valor){
+  if(!valor)return '';
+  if(Object.prototype.toString.call(valor)==='[object Date]'&&!Number.isNaN(valor.getTime()))return Utilities.formatDate(valor,Session.getScriptTimeZone(),'yyyy-MM-dd');
+  const texto=String(valor).trim();
+  if(/^\d{4}-\d{2}-\d{2}$/.test(texto))return texto;
+  const fecha=new Date(texto);
+  return Number.isNaN(fecha.getTime())?'':Utilities.formatDate(fecha,Session.getScriptTimeZone(),'yyyy-MM-dd');
+}
+
+function enviarMensajeTelegram(chatId,texto,mostrarMenu){
+  const token=obtenerTokenBotTelegram();
+  const payload={chat_id:chatId,text:String(texto||'')};
+  if(mostrarMenu)payload.reply_markup=crearTecladoTelegram();
+  const respuesta=UrlFetchApp.fetch('https://api.telegram.org/bot'+token+'/sendMessage',{
+    method:'post',
+    contentType:'application/json',
+    payload:JSON.stringify(payload),
+    muteHttpExceptions:true
+  });
+  const contenido=JSON.parse(respuesta.getContentText()||'{}');
+  if(!contenido.ok)throw new Error(contenido.description||'Telegram no pudo enviar el mensaje.');
+  return contenido.result;
+}
+
+function crearTecladoTelegram(){
+  return {
+    keyboard:[
+      [{text:'🏠 Inicio'},{text:'👩‍🎓 Alumnos'}],
+      [{text:'✅ Asistencia'},{text:'📝 Notas'}],
+      [{text:'📚 Planes'},{text:'🎂 Cumpleaños'}],
+      [{text:'🤝 Reuniones'},{text:'📅 Agenda'}],
+      [{text:'❓ Ayuda'}]
+    ],
+    resize_keyboard:true,
+    is_persistent:true,
+    input_field_placeholder:'Elige una opción de Aula Mágica'
+  };
+}
+
+function configurarComandosTelegram(){
+  const token=obtenerTokenBotTelegram();
+  const comandos=[
+    {command:'inicio',description:'Estado de la cuenta'},
+    {command:'alumnos',description:'Resumen de estudiantes'},
+    {command:'asistencia',description:'Asistencia de hoy'},
+    {command:'notas',description:'Resumen de calificaciones'},
+    {command:'planes',description:'Próximas planificaciones'},
+    {command:'cumpleanos',description:'Próximos cumpleaños'},
+    {command:'reuniones',description:'Próximas reuniones'},
+    {command:'agenda',description:'Próximos eventos'},
+    {command:'ayuda',description:'Mostrar opciones'}
+  ];
+  const respuesta=UrlFetchApp.fetch('https://api.telegram.org/bot'+token+'/setMyCommands',{
+    method:'post',contentType:'application/json',payload:JSON.stringify({commands:comandos}),muteHttpExceptions:true
+  });
+  const contenido=JSON.parse(respuesta.getContentText()||'{}');
+  if(!contenido.ok)throw new Error(contenido.description||'No se pudieron registrar los comandos de Telegram.');
+  return contenido.result;
+}
+
+function obtenerTokenBotTelegram(){
+  const token=PropertiesService.getScriptProperties().getProperty('TELEGRAM_BOT_TOKEN')||'';
+  if(!token)throw new Error('El bot de Telegram no está configurado.');
+  return token;
+}
+
+function normalizarUsuarioTelegram(valor){
+  return String(valor||'').trim().replace(/^@/,'').replace(/\s+/g,'');
+}
+
+
+/**
+ * Funciones usadas exclusivamente por el webhook de Telegram alojado en Vercel.
+ * Vercel se autentica con AULA_MAGICA_BOT_SECRET, guardado en Propiedades del script.
+ */
+function validarSecretoBotVercel(datos){
+  const esperado=String(
+    PropertiesService.getScriptProperties().getProperty('AULA_MAGICA_BOT_SECRET')||''
+  ).trim();
+  const recibido=String((datos&&datos.botSecret)||'').trim();
+
+  if(!esperado){
+    throw new Error('Falta configurar AULA_MAGICA_BOT_SECRET en Propiedades del script.');
+  }
+  if(!recibido||recibido!==esperado){
+    throw new Error('Solicitud del bot no autorizada.');
+  }
+}
+
+function botVincularTelegramVercel(datos){
+  validarSecretoBotVercel(datos);
+  validarObjeto(datos,['chatId','codigo']);
+
+  const chatId=String(datos.chatId).trim();
+  const codigo=String(datos.codigo).trim().toUpperCase();
+  const hoja=obtenerHoja('TELEGRAM');
+
+  const registro=obtenerRegistrosConFila('TELEGRAM').find(r=>
+    String(r.CODIGO_VINCULACION||'').trim().toUpperCase()===codigo&&
+    String(r.ESTADO||'').trim().toUpperCase()==='PENDIENTE'
+  );
+
+  if(!registro){
+    return {
+      ok:false,
+      vinculado:false,
+      texto:'❌ El código no existe, ya fue utilizado o no corresponde a una cuenta pendiente.'
+    };
+  }
+
+  const creado=new Date(registro.FECHA_VINCULACION);
+  if(Number.isNaN(creado.getTime())||Date.now()-creado.getTime()>30*60*1000){
+    return {
+      ok:false,
+      vinculado:false,
+      texto:'⌛ El código venció. Genera uno nuevo en Aula Mágica.'
+    };
+  }
+
+  const filas=obtenerRegistrosConFila('TELEGRAM');
+  const otro=filas.find(r=>
+    String(r.CHAT_ID||'').trim()===chatId&&
+    String(r.ID_MAESTRA)!==String(registro.ID_MAESTRA)
+  );
+
+  const lock=LockService.getScriptLock();
+  lock.waitLock(20000);
+  try{
+    if(otro){
+      hoja.getRange(otro.__fila,2,1,4).setValues([['','','DESVINCULADO',new Date()]]);
+    }
+    hoja.getRange(registro.__fila,1,1,5).setValues([[
+      registro.ID_MAESTRA,
+      chatId,
+      '',
+      'VINCULADO',
+      new Date()
+    ]]);
+  }finally{
+    lock.releaseLock();
+  }
+
+  const maestra=obtenerRegistros('MAESTRAS').find(r=>
+    String(r.ID_MAESTRA)===String(registro.ID_MAESTRA)
+  );
+  const nombre=maestra
+    ? (String(maestra.NOMBRE||'')+' '+String(maestra.APELLIDO||'')).trim()
+    : 'Maestra';
+
+  registrarAuditoria(
+    String(registro.ID_MAESTRA),
+    'VINCULAR',
+    'TELEGRAM',
+    'Cuenta vinculada mediante webhook de Vercel'
+  );
+
+  return {
+    ok:true,
+    vinculado:true,
+    idMaestra:String(registro.ID_MAESTRA),
+    nombre:nombre,
+    texto:'✅ Cuenta vinculada correctamente con Aula Mágica.\n\nMaestra: '+nombre
+  };
+}
+
+function botComandoTelegramVercel(datos){
+  validarSecretoBotVercel(datos);
+  validarObjeto(datos,['chatId','comando']);
+
+  const chatId=String(datos.chatId).trim();
+  const comando=String(datos.comando).trim().toLowerCase().replace(/^\//,'');
+  const enlace=obtenerRegistros('TELEGRAM').find(r=>
+    String(r.CHAT_ID||'').trim()===chatId&&
+    String(r.ESTADO||'').trim().toUpperCase()==='VINCULADO'
+  );
+
+  if(!enlace){
+    return {
+      vinculado:false,
+      texto:'🔒 Esta cuenta de Telegram no está vinculada.\n\nAbre Aula Mágica → Telegram, genera un código nuevo y envía:\n/vincular CODIGO'
+    };
+  }
+
+  const idMaestra=String(enlace.ID_MAESTRA);
+  let texto='';
+
+  if(comando==='inicio'||comando==='start'||comando==='estado'){
+    const maestra=obtenerRegistros('MAESTRAS').find(r=>
+      String(r.ID_MAESTRA)===idMaestra
+    );
+    const nombre=maestra
+      ? (String(maestra.NOMBRE||'')+' '+String(maestra.APELLIDO||'')).trim()
+      : 'Cuenta vinculada';
+    const grado=maestra?String(maestra.GRADO||''):'';
+    const seccion=maestra?String(maestra.SECCION||''):'';
+    const hoy=Utilities.formatDate(new Date(),obtenerZonaHorariaAulaMagica(),'yyyy-MM-dd');
+    const totalAlumnos=obtenerRegistros('ALUMNOS').filter(r=>
+      String(r.ID_MAESTRA)===idMaestra&&String(r.ESTADO).toUpperCase()!=='ELIMINADO'
+    ).length;
+    const asistenciaHoy=obtenerRegistros('ASISTENCIA').filter(r=>
+      String(r.ID_MAESTRA)===idMaestra&&normalizarFechaTextoTelegram(r.FECHA)===hoy
+    ).length;
+    const eventosHoy=obtenerRegistros('AGENDA').filter(r=>
+      String(r.ID_MAESTRA)===idMaestra&&
+      normalizarFechaTextoTelegram(r.FECHA)===hoy&&
+      String(r.ESTADO).toUpperCase()==='PENDIENTE'
+    ).length;
+
+    texto=[
+      '✨ Aula Mágica conectada',
+      '',
+      'Maestra: '+nombre,
+      grado||seccion?'Curso: '+[grado,seccion?'Sección '+seccion:''].filter(Boolean).join(' · '):'',
+      '',
+      '👩‍🎓 Alumnos: '+totalAlumnos,
+      asistenciaHoy?'✅ Asistencia de hoy guardada':'📋 Asistencia de hoy pendiente',
+      '📅 Eventos pendientes hoy: '+eventosHoy,
+      '',
+      'Selecciona una opción del menú.'
+    ].filter(Boolean).join('\n');
+  }else if(comando==='alumnos'){
+    texto=crearResumenAlumnosTelegram(idMaestra);
+  }else if(comando==='asistencia'){
+    texto=crearResumenAsistenciaTelegram(idMaestra);
+  }else if(comando==='notas'||comando==='calificaciones'){
+    texto=crearResumenCalificacionesTelegram(idMaestra);
+  }else if(comando==='planes'||comando==='planificacion'){
+    texto=crearResumenPlanificacionesTelegram(idMaestra);
+  }else if(comando==='cumpleanos'){
+    texto=crearResumenCumpleanosTelegram(idMaestra);
+  }else if(comando==='reuniones'){
+    texto=crearResumenReunionesTelegram(idMaestra);
+  }else if(comando==='agenda'){
+    texto=crearResumenAgendaTelegram(idMaestra);
+  }else if(comando==='ayuda'){
+    texto=[
+      '📱 Comandos de Aula Mágica',
+      '',
+      '/inicio — Estado de la cuenta',
+      '/alumnos — Resumen de estudiantes',
+      '/asistencia — Resumen de hoy',
+      '/notas — Resumen de calificaciones',
+      '/planes — Próximas planificaciones',
+      '/cumpleanos — Próximos cumpleaños',
+      '/reuniones — Próximas reuniones',
+      '/agenda — Próximos eventos',
+      '/ayuda — Mostrar esta ayuda'
+    ].join('\n');
+  }else{
+    texto='No reconozco esa opción. Usa los botones o escribe /ayuda.';
+  }
+
+  return {
+    vinculado:true,
+    idMaestra:idMaestra,
+    texto:String(texto||'No hay información disponible.')
+  };
+}
+
+
+function obtenerMaestraTelegramPorChat(datos){
+  validarSecretoBotVercel(datos);
+  validarObjeto(datos,['chatId']);
+  const chatId=String(datos.chatId).trim();
+  const enlace=obtenerRegistros('TELEGRAM').find(r=>
+    String(r.CHAT_ID||'').trim()===chatId&&
+    String(r.ESTADO||'').trim().toUpperCase()==='VINCULADO'
+  );
+  if(!enlace)throw new Error('Esta cuenta de Telegram no está vinculada.');
+  return {
+    chatId:chatId,
+    idMaestra:String(enlace.ID_MAESTRA)
+  };
+}
+
+function botListarAlumnosAsistencia(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  const alumnos=obtenerRegistros('ALUMNOS')
+    .filter(r=>
+      String(r.ID_MAESTRA)===enlace.idMaestra&&
+      String(r.ESTADO).toUpperCase()!=='ELIMINADO'
+    )
+    .map(r=>({
+      idAlumno:String(r.ID_ALUMNO||''),
+      nombre:(String(r.NOMBRE||'')+' '+String(r.APELLIDO||'')).trim(),
+      grado:String(r.GRADO||''),
+      seccion:String(r.SECCION||'')
+    }))
+    .sort((a,b)=>a.nombre.localeCompare(b.nombre));
+
+  return {
+    vinculado:true,
+    idMaestra:enlace.idMaestra,
+    alumnos:alumnos
+  };
+}
+
+function botGuardarAsistenciaRapida(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['modo']);
+
+  const modo=String(datos.modo||'').trim().toUpperCase();
+  const fecha=Utilities.formatDate(new Date(),obtenerZonaHorariaAulaMagica(),'yyyy-MM-dd');
+  const alumnos=obtenerRegistros('ALUMNOS').filter(r=>
+    String(r.ID_MAESTRA)===enlace.idMaestra&&
+    String(r.ESTADO).toUpperCase()!=='ELIMINADO'
+  );
+
+  if(!alumnos.length)throw new Error('No hay alumnos registrados.');
+
+  const hoja=obtenerHoja('ASISTENCIA');
+  const registrosHoy=obtenerRegistrosConFila('ASISTENCIA').filter(r=>
+    String(r.ID_MAESTRA)===enlace.idMaestra&&
+    normalizarFechaAsistencia(r.FECHA)===fecha
+  );
+
+  function guardarUnico(idAlumno,estado,observaciones){
+    const coincidencias=registrosHoy
+      .filter(r=>String(r.ID_ALUMNO)===String(idAlumno))
+      .sort((a,b)=>a.__fila-b.__fila);
+
+    if(coincidencias.length){
+      const principal=coincidencias[0];
+      hoja.getRange(principal.__fila,1,1,7).setValues([[
+        principal.ID_ASISTENCIA||generarId('ASI'),
+        enlace.idMaestra,
+        String(idAlumno),
+        fecha,
+        estado,
+        observaciones,
+        new Date()
+      ]]);
+
+      // Elimina duplicados antiguos de abajo hacia arriba.
+      coincidencias
+        .slice(1)
+        .map(r=>r.__fila)
+        .sort((a,b)=>b-a)
+        .forEach(fila=>hoja.deleteRow(fila));
+    }else{
+      hoja.appendRow([
+        generarId('ASI'),
+        enlace.idMaestra,
+        String(idAlumno),
+        fecha,
+        estado,
+        observaciones,
+        new Date()
+      ]);
+    }
+  }
+
+  const lock=LockService.getScriptLock();
+  lock.waitLock(20000);
+  try{
+    if(modo==='TODOS_PRESENTES'){
+      alumnos.forEach(a=>{
+        guardarUnico(
+          String(a.ID_ALUMNO),
+          'PRESENTE',
+          'Marcado desde Telegram'
+        );
+      });
+
+      registrarAuditoria(
+        enlace.idMaestra,
+        'GUARDAR',
+        'ASISTENCIA',
+        'Todos presentes desde Telegram: '+alumnos.length+' alumnos'
+      );
+
+      return {
+        guardados:alumnos.length,
+        fecha:fecha,
+        texto:'✅ Asistencia guardada.\n\nTodos los alumnos quedaron marcados como presentes.'
+      };
+    }
+
+    validarObjeto(datos,['idAlumno','estado']);
+    const idAlumno=String(datos.idAlumno).trim();
+    const estado=String(datos.estado).trim().toUpperCase();
+    const permitidos=['PRESENTE','AUSENTE','TARDE','JUSTIFICADO'];
+
+    if(!permitidos.includes(estado))throw new Error('Estado de asistencia no válido.');
+
+    const alumno=alumnos.find(a=>String(a.ID_ALUMNO)===idAlumno);
+    if(!alumno)throw new Error('El alumno no pertenece a esta maestra.');
+
+    guardarUnico(
+      idAlumno,
+      estado,
+      'Marcado desde Telegram'
+    );
+
+    const nombre=(String(alumno.NOMBRE||'')+' '+String(alumno.APELLIDO||'')).trim();
+    registrarAuditoria(
+      enlace.idMaestra,
+      'GUARDAR',
+      'ASISTENCIA',
+      nombre+' marcado '+estado+' desde Telegram'
+    );
+
+    return {
+      guardados:1,
+      fecha:fecha,
+      idAlumno:idAlumno,
+      estado:estado,
+      nombre:nombre,
+      texto:'✅ '+nombre+' quedó marcado como '+estado.toLowerCase()+'.'
+    };
+  }finally{
+    lock.releaseLock();
+  }
+}
+
+
+function claveFlujoAgendaTelegram(chatId){
+  return 'TELEGRAM_AGENDA_FLUJO_'+String(chatId).trim();
+}
+
+function guardarFlujoAgendaTelegram(chatId,flujo){
+  const contenido=Object.assign({},flujo,{actualizado:Date.now()});
+  PropertiesService.getScriptProperties().setProperty(
+    claveFlujoAgendaTelegram(chatId),
+    JSON.stringify(contenido)
+  );
+  return contenido;
+}
+
+function obtenerFlujoAgendaTelegram(chatId){
+  const clave=claveFlujoAgendaTelegram(chatId);
+  const valor=PropertiesService.getScriptProperties().getProperty(clave);
+  if(!valor)return null;
+
+  try{
+    const flujo=JSON.parse(valor);
+    if(Date.now()-Number(flujo.actualizado||0)>60*60*1000){
+      PropertiesService.getScriptProperties().deleteProperty(clave);
+      return null;
+    }
+    return flujo;
+  }catch(_){
+    PropertiesService.getScriptProperties().deleteProperty(clave);
+    return null;
+  }
+}
+
+function borrarFlujoAgendaTelegram(chatId){
+  PropertiesService.getScriptProperties().deleteProperty(
+    claveFlujoAgendaTelegram(chatId)
+  );
+}
+
+function normalizarFechaEntradaAgendaTelegram(valor){
+  const texto=String(valor||'').trim().toLowerCase();
+  const zona=obtenerZonaHorariaAulaMagica();
+  const hoy=new Date();
+
+  if(texto==='hoy'){
+    return Utilities.formatDate(hoy,zona,'yyyy-MM-dd');
+  }
+
+  if(texto==='mañana'||texto==='manana'){
+    const manana=new Date(hoy.getTime());
+    manana.setDate(manana.getDate()+1);
+    return Utilities.formatDate(manana,zona,'yyyy-MM-dd');
+  }
+
+  let ano,mes,dia;
+  let m=texto.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if(m){
+    dia=Number(m[1]); mes=Number(m[2]); ano=Number(m[3]);
+  }else{
+    m=texto.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if(!m)throw new Error('Escribe la fecha como DD/MM/AAAA, por ejemplo 30/07/2026.');
+    ano=Number(m[1]); mes=Number(m[2]); dia=Number(m[3]);
+  }
+
+  const fecha=new Date(ano,mes-1,dia,12,0,0);
+  if(
+    fecha.getFullYear()!==ano||
+    fecha.getMonth()!==mes-1||
+    fecha.getDate()!==dia
+  ){
+    throw new Error('La fecha no es válida.');
+  }
+
+  return [
+    String(ano).padStart(4,'0'),
+    String(mes).padStart(2,'0'),
+    String(dia).padStart(2,'0')
+  ].join('-');
+}
+
+function normalizarHoraEntradaAgendaTelegram(valor){
+  const texto=String(valor||'').trim();
+  const m=texto.match(/^(\d{1,2}):(\d{2})$/);
+  if(!m)throw new Error('Escribe la hora como HH:MM, por ejemplo 08:30.');
+
+  const hora=Number(m[1]);
+  const minuto=Number(m[2]);
+  if(hora<0||hora>23||minuto<0||minuto>59){
+    throw new Error('La hora no es válida.');
+  }
+
+  return String(hora).padStart(2,'0')+':'+String(minuto).padStart(2,'0');
+}
+
+function resumenBorradorAgendaTelegram(datos){
+  return [
+    '📅 Revisa el evento',
+    '',
+    'Título: '+String(datos.titulo||''),
+    'Fecha: '+formatearFechaTelegram(datos.fecha),
+    'Hora: '+String(datos.hora||''),
+    'Tipo: '+capitalizarTelegram(datos.tipo||'OTRO'),
+    'Descripción: '+(String(datos.descripcion||'').trim()||'Sin descripción')
+  ].join('\n');
+}
+
+function botIniciarAgendaTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  guardarFlujoAgendaTelegram(enlace.chatId,{
+    idMaestra:enlace.idMaestra,
+    paso:'TITULO',
+    datos:{}
+  });
+
+  return {
+    activo:true,
+    paso:'TITULO',
+    texto:'➕ Nuevo evento\n\nEscribe el título del evento.\n\nPuedes cancelar en cualquier momento con /cancelar.'
+  };
+}
+
+function botProcesarFlujoAgendaTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['texto']);
+
+  const texto=String(datos.texto||'').trim();
+  const flujo=obtenerFlujoAgendaTelegram(enlace.chatId);
+  if(!flujo)return {activo:false};
+
+  if(texto.toLowerCase()==='/cancelar'){
+    borrarFlujoAgendaTelegram(enlace.chatId);
+    return {
+      activo:false,
+      cancelado:true,
+      texto:'❌ Creación del evento cancelada.'
+    };
+  }
+
+  flujo.datos=flujo.datos||{};
+
+  if(flujo.paso==='TITULO'){
+    if(texto.length<2)throw new Error('El título debe tener al menos 2 caracteres.');
+    if(texto.length>120)throw new Error('El título es demasiado largo.');
+    flujo.datos.titulo=texto;
+    flujo.paso='FECHA';
+    guardarFlujoAgendaTelegram(enlace.chatId,flujo);
+    return {
+      activo:true,
+      paso:'FECHA',
+      texto:'📅 Escribe la fecha como DD/MM/AAAA.\n\nTambién puedes escribir hoy o mañana.'
+    };
+  }
+
+  if(flujo.paso==='FECHA'){
+    flujo.datos.fecha=normalizarFechaEntradaAgendaTelegram(texto);
+    flujo.paso='HORA';
+    guardarFlujoAgendaTelegram(enlace.chatId,flujo);
+    return {
+      activo:true,
+      paso:'HORA',
+      texto:'🕐 Escribe la hora como HH:MM.\n\nEjemplo: 08:30'
+    };
+  }
+
+  if(flujo.paso==='HORA'){
+    flujo.datos.hora=normalizarHoraEntradaAgendaTelegram(texto);
+    flujo.paso='TIPO';
+    guardarFlujoAgendaTelegram(enlace.chatId,flujo);
+    return {
+      activo:true,
+      paso:'TIPO',
+      texto:'🏷️ Selecciona el tipo de evento.'
+    };
+  }
+
+  if(flujo.paso==='DESCRIPCION'){
+    if(texto.length>500)throw new Error('La descripción es demasiado larga.');
+    flujo.datos.descripcion=texto==='-'?'':texto;
+    flujo.paso='CONFIRMAR';
+    guardarFlujoAgendaTelegram(enlace.chatId,flujo);
+    return {
+      activo:true,
+      paso:'CONFIRMAR',
+      texto:resumenBorradorAgendaTelegram(flujo.datos)
+    };
+  }
+
+  return {
+    activo:true,
+    paso:String(flujo.paso||''),
+    texto:'Continúa usando los botones mostrados o escribe /cancelar.'
+  };
+}
+
+function botSeleccionarTipoAgendaTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['tipo']);
+
+  const flujo=obtenerFlujoAgendaTelegram(enlace.chatId);
+  if(!flujo||flujo.paso!=='TIPO'){
+    throw new Error('No hay un evento esperando el tipo.');
+  }
+
+  const tipo=String(datos.tipo||'').trim().toUpperCase();
+  const permitidos=['CLASE','ACTIVIDAD','RECORDATORIO','ENTREGA','OTRO'];
+  if(!permitidos.includes(tipo))throw new Error('Tipo de evento no válido.');
+
+  flujo.datos=flujo.datos||{};
+  flujo.datos.tipo=tipo;
+  flujo.paso='DESCRIPCION';
+  guardarFlujoAgendaTelegram(enlace.chatId,flujo);
+
+  return {
+    activo:true,
+    paso:'DESCRIPCION',
+    texto:'📝 Escribe una descripción.\n\nEscribe un guion - para dejarla vacía.'
+  };
+}
+
+function botConfirmarAgendaTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  const flujo=obtenerFlujoAgendaTelegram(enlace.chatId);
+
+  if(!flujo||flujo.paso!=='CONFIRMAR'){
+    throw new Error('No hay un evento pendiente de confirmación.');
+  }
+
+  const d=flujo.datos||{};
+  if(!d.titulo||!d.fecha||!d.hora||!d.tipo){
+    throw new Error('Faltan datos del evento.');
+  }
+
+  const idEvento=generarId('EVE');
+  const hojaAgenda=obtenerHoja('AGENDA');
+  const nuevaFila=hojaAgenda.getLastRow()+1;
+  guardarFilaAgendaComoTexto(hojaAgenda,nuevaFila,[
+    idEvento,
+    enlace.idMaestra,
+    String(d.titulo),
+    String(d.tipo),
+    String(d.fecha),
+    String(d.hora),
+    String(d.descripcion||''),
+    'PENDIENTE',
+    new Date()
+  ]);
+
+  registrarAuditoria(
+    enlace.idMaestra,
+    'CREAR',
+    'AGENDA',
+    'Evento creado desde Telegram: '+String(d.titulo)
+  );
+
+  borrarFlujoAgendaTelegram(enlace.chatId);
+
+  return {
+    activo:false,
+    guardado:true,
+    idEvento:idEvento,
+    texto:'✅ Evento guardado correctamente.\n\n'+resumenBorradorAgendaTelegram(d)
+  };
+}
+
+function botCancelarFlujoAgendaTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  borrarFlujoAgendaTelegram(enlace.chatId);
+  return {
+    activo:false,
+    cancelado:true,
+    texto:'❌ Creación del evento cancelada.'
+  };
+}
+
+
+function claveFlujoReunionTelegram(chatId){
+  return 'TELEGRAM_REUNION_FLUJO_'+String(chatId).trim();
+}
+
+function guardarFlujoReunionTelegram(chatId,flujo){
+  const contenido=Object.assign({},flujo,{actualizado:Date.now()});
+  PropertiesService.getScriptProperties().setProperty(
+    claveFlujoReunionTelegram(chatId),
+    JSON.stringify(contenido)
+  );
+  return contenido;
+}
+
+function obtenerFlujoReunionTelegram(chatId){
+  const clave=claveFlujoReunionTelegram(chatId);
+  const valor=PropertiesService.getScriptProperties().getProperty(clave);
+  if(!valor)return null;
+
+  try{
+    const flujo=JSON.parse(valor);
+    if(Date.now()-Number(flujo.actualizado||0)>60*60*1000){
+      PropertiesService.getScriptProperties().deleteProperty(clave);
+      return null;
+    }
+    return flujo;
+  }catch(_){
+    PropertiesService.getScriptProperties().deleteProperty(clave);
+    return null;
+  }
+}
+
+function borrarFlujoReunionTelegram(chatId){
+  PropertiesService.getScriptProperties().deleteProperty(
+    claveFlujoReunionTelegram(chatId)
+  );
+}
+
+function resumenBorradorReunionTelegram(datos){
+  return [
+    '🤝 Revisa la reunión',
+    '',
+    'Título: '+String(datos.titulo||''),
+    'Fecha: '+formatearFechaTelegram(datos.fecha),
+    'Hora: '+String(datos.hora||''),
+    'Lugar: '+(String(datos.lugar||'').trim()||'Sin lugar'),
+    'Participantes: '+(String(datos.participantes||'').trim()||'Sin participantes'),
+    'Temas: '+(String(datos.temas||'').trim()||'Sin temas')
+  ].join('\n');
+}
+
+function botIniciarReunionTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  guardarFlujoReunionTelegram(enlace.chatId,{
+    idMaestra:enlace.idMaestra,
+    paso:'TITULO',
+    datos:{}
+  });
+
+  return {
+    activo:true,
+    paso:'TITULO',
+    texto:'➕ Nueva reunión\n\nEscribe el título de la reunión.\n\nPuedes cancelar con /cancelar.'
+  };
+}
+
+function botProcesarFlujoReunionTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['texto']);
+
+  const texto=String(datos.texto||'').trim();
+  const flujo=obtenerFlujoReunionTelegram(enlace.chatId);
+  if(!flujo)return {activo:false};
+
+  if(texto.toLowerCase()==='/cancelar'){
+    borrarFlujoReunionTelegram(enlace.chatId);
+    return {activo:false,cancelado:true,texto:'❌ Creación de reunión cancelada.'};
+  }
+
+  flujo.datos=flujo.datos||{};
+
+  if(flujo.paso==='TITULO'){
+    if(texto.length<2)throw new Error('El título debe tener al menos 2 caracteres.');
+    flujo.datos.titulo=texto;
+    flujo.paso='FECHA';
+    guardarFlujoReunionTelegram(enlace.chatId,flujo);
+    return {
+      activo:true,
+      paso:'FECHA',
+      texto:'📅 Escribe la fecha como DD/MM/AAAA.\n\nTambién puedes escribir hoy o mañana.'
+    };
+  }
+
+  if(flujo.paso==='FECHA'){
+    flujo.datos.fecha=normalizarFechaEntradaAgendaTelegram(texto);
+    flujo.paso='HORA';
+    guardarFlujoReunionTelegram(enlace.chatId,flujo);
+    return {
+      activo:true,
+      paso:'HORA',
+      texto:'🕐 Escribe la hora como HH:MM.\n\nEjemplo: 09:00'
+    };
+  }
+
+  if(flujo.paso==='HORA'){
+    flujo.datos.hora=normalizarHoraEntradaAgendaTelegram(texto);
+    flujo.paso='LUGAR';
+    guardarFlujoReunionTelegram(enlace.chatId,flujo);
+    return {
+      activo:true,
+      paso:'LUGAR',
+      texto:'📍 Escribe el lugar de la reunión.\n\nEscribe un guion - para dejarlo vacío.'
+    };
+  }
+
+  if(flujo.paso==='LUGAR'){
+    flujo.datos.lugar=texto==='-'?'':texto;
+    flujo.paso='PARTICIPANTES';
+    guardarFlujoReunionTelegram(enlace.chatId,flujo);
+    return {
+      activo:true,
+      paso:'PARTICIPANTES',
+      texto:'👥 Escribe los participantes.\n\nEjemplo: representantes y docentes'
+    };
+  }
+
+  if(flujo.paso==='PARTICIPANTES'){
+    flujo.datos.participantes=texto==='-'?'':texto;
+    flujo.paso='TEMAS';
+    guardarFlujoReunionTelegram(enlace.chatId,flujo);
+    return {
+      activo:true,
+      paso:'TEMAS',
+      texto:'📝 Escribe los temas a tratar.\n\nEscribe un guion - para dejarlo vacío.'
+    };
+  }
+
+  if(flujo.paso==='TEMAS'){
+    flujo.datos.temas=texto==='-'?'':texto;
+    flujo.paso='CONFIRMAR';
+    guardarFlujoReunionTelegram(enlace.chatId,flujo);
+    return {
+      activo:true,
+      paso:'CONFIRMAR',
+      texto:resumenBorradorReunionTelegram(flujo.datos)
+    };
+  }
+
+  return {
+    activo:true,
+    paso:String(flujo.paso||''),
+    texto:'Continúa con el siguiente paso o escribe /cancelar.'
+  };
+}
+
+function botConfirmarReunionTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  const flujo=obtenerFlujoReunionTelegram(enlace.chatId);
+
+  if(!flujo||flujo.paso!=='CONFIRMAR'){
+    throw new Error('No hay una reunión pendiente de confirmación.');
+  }
+
+  const d=flujo.datos||{};
+  if(!d.titulo||!d.fecha||!d.hora){
+    throw new Error('Faltan datos de la reunión.');
+  }
+
+  const idReunion=generarId('REU');
+  const hoja=obtenerHoja('REUNIONES');
+  const fila=hoja.getLastRow()+1;
+  hoja.getRange(fila,1,1,12).setValues([[
+    idReunion,
+    enlace.idMaestra,
+    String(d.titulo),
+    String(d.fecha),
+    String(d.hora),
+    String(d.lugar||''),
+    String(d.participantes||''),
+    String(d.temas||''),
+    '',
+    'PROGRAMADA',
+    new Date(),
+    new Date()
+  ]]);
+  hoja.getRange(fila,4,1,2).setNumberFormat('@');
+  hoja.getRange(fila,4).setValue(String(d.fecha));
+  hoja.getRange(fila,5).setValue(String(d.hora));
+
+  registrarAuditoria(
+    enlace.idMaestra,
+    'CREAR',
+    'REUNIONES',
+    'Reunión creada desde Telegram: '+String(d.titulo)
+  );
+
+  borrarFlujoReunionTelegram(enlace.chatId);
+
+  return {
+    activo:false,
+    guardado:true,
+    idReunion:idReunion,
+    texto:'✅ Reunión guardada correctamente.\n\n'+resumenBorradorReunionTelegram(d)
+  };
+}
+
+function botCancelarFlujoReunionTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  borrarFlujoReunionTelegram(enlace.chatId);
+  return {
+    activo:false,
+    cancelado:true,
+    texto:'❌ Creación de reunión cancelada.'
+  };
+}
+
+
+function claveFlujoPlanificacionTelegram(chatId){
+  return 'TELEGRAM_PLANIFICACION_FLUJO_'+String(chatId).trim();
+}
+
+function guardarFlujoPlanificacionTelegram(chatId,flujo){
+  const contenido=Object.assign({},flujo,{actualizado:Date.now()});
+  PropertiesService.getScriptProperties().setProperty(
+    claveFlujoPlanificacionTelegram(chatId),
+    JSON.stringify(contenido)
+  );
+  return contenido;
+}
+
+function obtenerFlujoPlanificacionTelegram(chatId){
+  const clave=claveFlujoPlanificacionTelegram(chatId);
+  const valor=PropertiesService.getScriptProperties().getProperty(clave);
+  if(!valor)return null;
+
+  try{
+    const flujo=JSON.parse(valor);
+    if(Date.now()-Number(flujo.actualizado||0)>60*60*1000){
+      PropertiesService.getScriptProperties().deleteProperty(clave);
+      return null;
+    }
+    return flujo;
+  }catch(_){
+    PropertiesService.getScriptProperties().deleteProperty(clave);
+    return null;
+  }
+}
+
+function borrarFlujoPlanificacionTelegram(chatId){
+  PropertiesService.getScriptProperties().deleteProperty(
+    claveFlujoPlanificacionTelegram(chatId)
+  );
+}
+
+function resumenBorradorPlanificacionTelegram(datos){
+  return [
+    '📚 Revisa la planificación',
+    '',
+    'Título: '+String(datos.titulo||''),
+    'Asignatura: '+String(datos.asignatura||''),
+    'Grado: '+String(datos.grado||''),
+    'Fecha: '+formatearFechaTelegram(datos.fecha),
+    'Objetivo: '+String(datos.objetivo||''),
+    'Contenido: '+String(datos.contenido||''),
+    'Actividades: '+String(datos.actividades||''),
+    'Recursos: '+(String(datos.recursos||'').trim()||'Sin recursos'),
+    'Evaluación: '+(String(datos.evaluacion||'').trim()||'Sin evaluación')
+  ].join('\n');
+}
+
+function botIniciarPlanificacionTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+
+  guardarFlujoPlanificacionTelegram(enlace.chatId,{
+    idMaestra:enlace.idMaestra,
+    paso:'TITULO',
+    datos:{}
+  });
+
+  return {
+    activo:true,
+    paso:'TITULO',
+    texto:'➕ Nueva planificación\n\nEscribe el título.\n\nPuedes cancelar con /cancelar.'
+  };
+}
+
+function botProcesarFlujoPlanificacionTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['texto']);
+
+  const texto=String(datos.texto||'').trim();
+  const flujo=obtenerFlujoPlanificacionTelegram(enlace.chatId);
+
+  if(!flujo)return {activo:false};
+
+  if(texto.toLowerCase()==='/cancelar'){
+    borrarFlujoPlanificacionTelegram(enlace.chatId);
+    return {
+      activo:false,
+      cancelado:true,
+      texto:'❌ Creación de planificación cancelada.'
+    };
+  }
+
+  flujo.datos=flujo.datos||{};
+
+  if(flujo.paso==='TITULO'){
+    if(texto.length<2)throw new Error('El título debe tener al menos 2 caracteres.');
+    flujo.datos.titulo=texto;
+    flujo.paso='ASIGNATURA';
+    guardarFlujoPlanificacionTelegram(enlace.chatId,flujo);
+    return {activo:true,paso:'ASIGNATURA',texto:'📘 Escribe la asignatura.'};
+  }
+
+  if(flujo.paso==='ASIGNATURA'){
+    flujo.datos.asignatura=texto;
+    flujo.paso='GRADO';
+    guardarFlujoPlanificacionTelegram(enlace.chatId,flujo);
+    return {
+      activo:true,
+      paso:'GRADO',
+      texto:'🎓 Escribe el grado.\n\nEjemplo: 1 grado'
+    };
+  }
+
+  if(flujo.paso==='GRADO'){
+    flujo.datos.grado=texto;
+    flujo.paso='FECHA';
+    guardarFlujoPlanificacionTelegram(enlace.chatId,flujo);
+    return {
+      activo:true,
+      paso:'FECHA',
+      texto:'📅 Escribe la fecha como DD/MM/AAAA.\n\nTambién puedes escribir hoy o mañana.'
+    };
+  }
+
+  if(flujo.paso==='FECHA'){
+    flujo.datos.fecha=normalizarFechaEntradaAgendaTelegram(texto);
+    flujo.paso='OBJETIVO';
+    guardarFlujoPlanificacionTelegram(enlace.chatId,flujo);
+    return {activo:true,paso:'OBJETIVO',texto:'🎯 Escribe el objetivo de la clase.'};
+  }
+
+  if(flujo.paso==='OBJETIVO'){
+    flujo.datos.objetivo=texto;
+    flujo.paso='CONTENIDO';
+    guardarFlujoPlanificacionTelegram(enlace.chatId,flujo);
+    return {activo:true,paso:'CONTENIDO',texto:'📖 Escribe el contenido.'};
+  }
+
+  if(flujo.paso==='CONTENIDO'){
+    flujo.datos.contenido=texto;
+    flujo.paso='ACTIVIDADES';
+    guardarFlujoPlanificacionTelegram(enlace.chatId,flujo);
+    return {activo:true,paso:'ACTIVIDADES',texto:'✏️ Escribe las actividades.'};
+  }
+
+  if(flujo.paso==='ACTIVIDADES'){
+    flujo.datos.actividades=texto;
+    flujo.paso='RECURSOS';
+    guardarFlujoPlanificacionTelegram(enlace.chatId,flujo);
+    return {
+      activo:true,
+      paso:'RECURSOS',
+      texto:'🧰 Escribe los recursos.\n\nEscribe un guion - para dejarlo vacío.'
+    };
+  }
+
+  if(flujo.paso==='RECURSOS'){
+    flujo.datos.recursos=texto==='-'?'':texto;
+    flujo.paso='EVALUACION';
+    guardarFlujoPlanificacionTelegram(enlace.chatId,flujo);
+    return {
+      activo:true,
+      paso:'EVALUACION',
+      texto:'📝 Escribe la evaluación.\n\nEscribe un guion - para dejarla vacía.'
+    };
+  }
+
+  if(flujo.paso==='EVALUACION'){
+    flujo.datos.evaluacion=texto==='-'?'':texto;
+    flujo.paso='CONFIRMAR';
+    guardarFlujoPlanificacionTelegram(enlace.chatId,flujo);
+    return {
+      activo:true,
+      paso:'CONFIRMAR',
+      texto:resumenBorradorPlanificacionTelegram(flujo.datos)
+    };
+  }
+
+  return {
+    activo:true,
+    paso:String(flujo.paso||''),
+    texto:'Continúa con el siguiente paso o escribe /cancelar.'
+  };
+}
+
+function botConfirmarPlanificacionTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  const flujo=obtenerFlujoPlanificacionTelegram(enlace.chatId);
+
+  if(!flujo||flujo.paso!=='CONFIRMAR'){
+    throw new Error('No hay una planificación pendiente de confirmación.');
+  }
+
+  const d=flujo.datos||{};
+  if(!d.titulo||!d.asignatura||!d.grado||!d.fecha){
+    throw new Error('Faltan datos obligatorios.');
+  }
+
+  const idPlanificacion=generarId('PLA');
+  const hoja=obtenerHoja('PLANIFICACION');
+  const fila=hoja.getLastRow()+1;
+
+  hoja.getRange(fila,1,1,13).setValues([[
+    idPlanificacion,
+    enlace.idMaestra,
+    String(d.titulo),
+    String(d.asignatura),
+    String(d.grado),
+    String(d.fecha),
+    String(d.objetivo||''),
+    String(d.contenido||''),
+    String(d.actividades||''),
+    String(d.recursos||''),
+    String(d.evaluacion||''),
+    'PLANIFICADA',
+    new Date()
+  ]]);
+
+  hoja.getRange(fila,6).setNumberFormat('@');
+  hoja.getRange(fila,6).setValue(String(d.fecha));
+
+  registrarAuditoria(
+    enlace.idMaestra,
+    'CREAR',
+    'PLANIFICACION',
+    'Planificación creada desde Telegram: '+String(d.titulo)
+  );
+
+  borrarFlujoPlanificacionTelegram(enlace.chatId);
+
+  return {
+    activo:false,
+    guardado:true,
+    idPlanificacion:idPlanificacion,
+    texto:'✅ Planificación guardada correctamente.\n\n'+
+      resumenBorradorPlanificacionTelegram(d)
+  };
+}
+
+function botCancelarFlujoPlanificacionTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  borrarFlujoPlanificacionTelegram(enlace.chatId);
+
+  return {
+    activo:false,
+    cancelado:true,
+    texto:'❌ Creación de planificación cancelada.'
+  };
+}
+
+
+function claveFlujoCalificacionTelegram(chatId){
+  return 'TELEGRAM_CALIFICACION_FLUJO_'+String(chatId).trim();
+}
+
+function guardarFlujoCalificacionTelegram(chatId,flujo){
+  const contenido=Object.assign({},flujo,{actualizado:Date.now()});
+  PropertiesService.getScriptProperties().setProperty(
+    claveFlujoCalificacionTelegram(chatId),
+    JSON.stringify(contenido)
+  );
+  return contenido;
+}
+
+function obtenerFlujoCalificacionTelegram(chatId){
+  const clave=claveFlujoCalificacionTelegram(chatId);
+  const valor=PropertiesService.getScriptProperties().getProperty(clave);
+  if(!valor)return null;
+  try{
+    const flujo=JSON.parse(valor);
+    if(Date.now()-Number(flujo.actualizado||0)>60*60*1000){
+      PropertiesService.getScriptProperties().deleteProperty(clave);
+      return null;
+    }
+    return flujo;
+  }catch(_){
+    PropertiesService.getScriptProperties().deleteProperty(clave);
+    return null;
+  }
+}
+
+function borrarFlujoCalificacionTelegram(chatId){
+  PropertiesService.getScriptProperties().deleteProperty(
+    claveFlujoCalificacionTelegram(chatId)
+  );
+}
+
+function obtenerAsignaturaCalificacionTelegram(codigo){
+  const asignaturas={
+    MATEMATICA:'Matemática',
+    LENGUA:'Lengua Española',
+    NATURALES:'Ciencias Naturales',
+    SOCIALES:'Ciencias Sociales',
+    ARTISTICA:'Educación Artística',
+    FISICA:'Educación Física',
+    FORMACION:'Formación Integral',
+    INGLES:'Inglés'
+  };
+  return asignaturas[String(codigo||'').trim().toUpperCase()]||'';
+}
+
+function obtenerPeriodoCalificacionTelegram(codigo){
+  const periodos={
+    P1:'Primer período',
+    P2:'Segundo período',
+    P3:'Tercer período',
+    P4:'Cuarto período'
+  };
+  return periodos[String(codigo||'').trim().toUpperCase()]||'';
+}
+
+function normalizarNumeroCalificacionTelegram(valor,nombreCampo){
+  const texto=String(valor||'').trim().replace(',','.');
+  const numero=Number(texto);
+  if(!Number.isFinite(numero))throw new Error(nombreCampo+' no es válida.');
+  return numero;
+}
+
+function resumenBorradorCalificacionTelegram(datos){
+  const maxima=Number(datos.calificacionMaxima||0);
+  const nota=Number(datos.calificacion||0);
+  const porcentaje=maxima>0?Math.round((nota/maxima)*100):0;
+  return [
+    '📝 Revisa la calificación','',
+    'Alumno: '+String(datos.nombreAlumno||''),
+    'Asignatura: '+String(datos.asignatura||''),
+    'Período: '+String(datos.periodo||''),
+    'Actividad: '+String(datos.actividad||''),
+    'Calificación: '+nota+'/'+maxima+' ('+porcentaje+'%)',
+    'Fecha: '+formatearFechaTelegram(datos.fecha),
+    'Observaciones: '+(String(datos.observaciones||'').trim()||'Sin observaciones')
+  ].join('\n');
+}
+
+function botIniciarCalificacionTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  const alumnos=obtenerRegistros('ALUMNOS')
+    .filter(r=>String(r.ID_MAESTRA||'').trim()===enlace.idMaestra&&String(r.ESTADO||'').trim().toUpperCase()!=='ELIMINADO')
+    .map(r=>({
+      idAlumno:String(r.ID_ALUMNO||''),
+      nombre:(String(r.NOMBRE||'')+' '+String(r.APELLIDO||'')).trim(),
+      grado:String(r.GRADO||''),
+      seccion:String(r.SECCION||'')
+    }))
+    .sort((a,b)=>a.nombre.localeCompare(b.nombre));
+  guardarFlujoCalificacionTelegram(enlace.chatId,{idMaestra:enlace.idMaestra,paso:'ALUMNO',datos:{}});
+  return {activo:true,paso:'ALUMNO',alumnos:alumnos,texto:'👩‍🎓 Selecciona el alumno que recibirá la calificación.'};
+}
+
+function botSeleccionarAlumnoCalificacionTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['idAlumno']);
+  const flujo=obtenerFlujoCalificacionTelegram(enlace.chatId);
+  if(!flujo)throw new Error('No hay un registro de calificación activo. Pulsa Registrar nota nuevamente.');
+  const alumno=obtenerRegistros('ALUMNOS').find(r=>
+    String(r.ID_ALUMNO||'').trim()===String(datos.idAlumno||'').trim()&&
+    String(r.ID_MAESTRA||'').trim()===enlace.idMaestra&&
+    String(r.ESTADO||'').trim().toUpperCase()!=='ELIMINADO'
+  );
+  if(!alumno)throw new Error('El alumno no pertenece a esta maestra.');
+  flujo.datos=flujo.datos||{};
+  flujo.datos.idAlumno=String(alumno.ID_ALUMNO||'');
+  flujo.datos.nombreAlumno=(String(alumno.NOMBRE||'')+' '+String(alumno.APELLIDO||'')).trim();
+  flujo.paso='ASIGNATURA';
+  guardarFlujoCalificacionTelegram(enlace.chatId,flujo);
+  return {activo:true,paso:'ASIGNATURA',texto:'📘 Selecciona la asignatura.'};
+}
+
+function botSeleccionarAsignaturaCalificacionTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['asignatura']);
+  const flujo=obtenerFlujoCalificacionTelegram(enlace.chatId);
+  if(!flujo||!flujo.datos||!flujo.datos.idAlumno)throw new Error('Primero debes seleccionar un alumno.');
+  const codigo=String(datos.asignatura||'').trim().toUpperCase();
+  if(codigo==='OTRA'){
+    flujo.paso='ASIGNATURA_OTRA';
+    guardarFlujoCalificacionTelegram(enlace.chatId,flujo);
+    return {activo:true,paso:'ASIGNATURA_OTRA',texto:'✍️ Escribe el nombre de la asignatura.'};
+  }
+  const asignatura=obtenerAsignaturaCalificacionTelegram(codigo);
+  if(!asignatura)throw new Error('La asignatura seleccionada no es válida.');
+  flujo.datos.asignatura=asignatura;
+  flujo.paso='PERIODO';
+  guardarFlujoCalificacionTelegram(enlace.chatId,flujo);
+  return {activo:true,paso:'PERIODO',texto:'📆 Selecciona el período.'};
+}
+
+function botSeleccionarPeriodoCalificacionTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['periodo']);
+  const flujo=obtenerFlujoCalificacionTelegram(enlace.chatId);
+  if(!flujo||!flujo.datos||!flujo.datos.asignatura)throw new Error('Primero debes seleccionar una asignatura.');
+  const periodo=obtenerPeriodoCalificacionTelegram(datos.periodo);
+  if(!periodo)throw new Error('El período seleccionado no es válido.');
+  flujo.datos.periodo=periodo;
+  flujo.paso='ACTIVIDAD';
+  guardarFlujoCalificacionTelegram(enlace.chatId,flujo);
+  return {activo:true,paso:'ACTIVIDAD',texto:'✏️ Escribe el nombre de la actividad o evaluación.'};
+}
+
+function botProcesarFlujoCalificacionTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['texto']);
+  const texto=String(datos.texto||'').trim();
+  const flujo=obtenerFlujoCalificacionTelegram(enlace.chatId);
+  if(!flujo)return {activo:false};
+  if(texto.toLowerCase()==='/cancelar'){
+    borrarFlujoCalificacionTelegram(enlace.chatId);
+    return {activo:false,cancelado:true,texto:'❌ Registro de calificación cancelado.'};
+  }
+  flujo.datos=flujo.datos||{};
+  if(flujo.paso==='ASIGNATURA_OTRA'){
+    if(texto.length<2)throw new Error('La asignatura debe tener al menos 2 caracteres.');
+    flujo.datos.asignatura=texto; flujo.paso='PERIODO'; guardarFlujoCalificacionTelegram(enlace.chatId,flujo);
+    return {activo:true,paso:'PERIODO',texto:'📆 Selecciona el período.'};
+  }
+  if(flujo.paso==='ACTIVIDAD'){
+    if(texto.length<2)throw new Error('La actividad debe tener al menos 2 caracteres.');
+    flujo.datos.actividad=texto; flujo.paso='CALIFICACION'; guardarFlujoCalificacionTelegram(enlace.chatId,flujo);
+    return {activo:true,paso:'CALIFICACION',texto:'🔢 Escribe la calificación obtenida.\n\nEjemplo: 15'};
+  }
+  if(flujo.paso==='CALIFICACION'){
+    const calificacion=normalizarNumeroCalificacionTelegram(texto,'La calificación');
+    if(calificacion<0)throw new Error('La calificación no puede ser negativa.');
+    flujo.datos.calificacion=calificacion; flujo.paso='MAXIMA'; guardarFlujoCalificacionTelegram(enlace.chatId,flujo);
+    return {activo:true,paso:'MAXIMA',texto:'🏆 Escribe la calificación máxima.\n\nEjemplo: 20'};
+  }
+  if(flujo.paso==='MAXIMA'){
+    const maxima=normalizarNumeroCalificacionTelegram(texto,'La calificación máxima');
+    if(maxima<=0)throw new Error('La calificación máxima debe ser mayor que cero.');
+    if(Number(flujo.datos.calificacion)>maxima)throw new Error('La calificación no puede superar la máxima.');
+    flujo.datos.calificacionMaxima=maxima; flujo.paso='FECHA'; guardarFlujoCalificacionTelegram(enlace.chatId,flujo);
+    return {activo:true,paso:'FECHA',texto:'📅 Escribe la fecha como DD/MM/AAAA.\n\nTambién puedes escribir hoy o mañana.'};
+  }
+  if(flujo.paso==='FECHA'){
+    flujo.datos.fecha=normalizarFechaEntradaAgendaTelegram(texto); flujo.paso='OBSERVACIONES'; guardarFlujoCalificacionTelegram(enlace.chatId,flujo);
+    return {activo:true,paso:'OBSERVACIONES',texto:'🗒️ Escribe las observaciones.\n\nEscribe un guion - para dejarlas vacías.'};
+  }
+  if(flujo.paso==='OBSERVACIONES'){
+    flujo.datos.observaciones=texto==='-'?'':texto; flujo.paso='CONFIRMAR'; guardarFlujoCalificacionTelegram(enlace.chatId,flujo);
+    return {activo:true,paso:'CONFIRMAR',texto:resumenBorradorCalificacionTelegram(flujo.datos)};
+  }
+  return {activo:true,paso:String(flujo.paso||''),texto:'Continúa con los botones mostrados o escribe /cancelar.'};
+}
+
+function botConfirmarCalificacionTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  const flujo=obtenerFlujoCalificacionTelegram(enlace.chatId);
+  if(!flujo||flujo.paso!=='CONFIRMAR')throw new Error('No hay una calificación pendiente de confirmación.');
+  const d=flujo.datos||{};
+  if(!d.idAlumno||!d.asignatura||!d.actividad||!d.periodo||d.calificacion===undefined||d.calificacionMaxima===undefined||!d.fecha){
+    throw new Error('Faltan datos obligatorios de la calificación.');
+  }
+  const alumno=obtenerRegistros('ALUMNOS').find(r=>
+    String(r.ID_ALUMNO||'').trim()===String(d.idAlumno||'').trim()&&
+    String(r.ID_MAESTRA||'').trim()===enlace.idMaestra&&
+    String(r.ESTADO||'').trim().toUpperCase()!=='ELIMINADO'
+  );
+  if(!alumno)throw new Error('El alumno ya no está disponible.');
+  const calificacion=Number(d.calificacion), maxima=Number(d.calificacionMaxima);
+  if(!Number.isFinite(calificacion)||calificacion<0)throw new Error('La calificación no es válida.');
+  if(!Number.isFinite(maxima)||maxima<=0)throw new Error('La calificación máxima no es válida.');
+  if(calificacion>maxima)throw new Error('La calificación no puede superar la máxima.');
+  const idCalificacion=generarId('CAL');
+  const hoja=obtenerHoja('CALIFICACIONES');
+  const fila=hoja.getLastRow()+1;
+  hoja.getRange(fila,1,1,10).setValues([[
+    idCalificacion,enlace.idMaestra,String(d.idAlumno),String(d.asignatura),String(d.actividad),String(d.periodo),
+    calificacion,maxima,String(d.fecha),String(d.observaciones||'')
+  ]]);
+  hoja.getRange(fila,9).setNumberFormat('@');
+  hoja.getRange(fila,9).setValue(String(d.fecha));
+  registrarAuditoria(enlace.idMaestra,'CREAR','CALIFICACIONES','Calificación creada desde Telegram: '+String(d.nombreAlumno||'Alumno'));
+  borrarFlujoCalificacionTelegram(enlace.chatId);
+  return {activo:false,guardado:true,idCalificacion:idCalificacion,texto:'✅ Calificación guardada correctamente.\n\n'+resumenBorradorCalificacionTelegram(d)};
+}
+
+function botCancelarFlujoCalificacionTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  borrarFlujoCalificacionTelegram(enlace.chatId);
+  return {activo:false,cancelado:true,texto:'❌ Registro de calificación cancelado.'};
+}
+
+
+function claveFlujoAlumnoTelegram(chatId){
+  return 'TELEGRAM_ALUMNO_FLUJO_'+String(chatId).trim();
+}
+
+function guardarFlujoAlumnoTelegram(chatId,flujo){
+  const contenido=Object.assign({},flujo,{actualizado:Date.now()});
+  PropertiesService.getScriptProperties().setProperty(
+    claveFlujoAlumnoTelegram(chatId),
+    JSON.stringify(contenido)
+  );
+  return contenido;
+}
+
+function obtenerFlujoAlumnoTelegram(chatId){
+  const clave=claveFlujoAlumnoTelegram(chatId);
+  const valor=PropertiesService.getScriptProperties().getProperty(clave);
+
+  if(!valor)return null;
+
+  try{
+    const flujo=JSON.parse(valor);
+
+    if(Date.now()-Number(flujo.actualizado||0)>60*60*1000){
+      PropertiesService.getScriptProperties().deleteProperty(clave);
+      return null;
+    }
+
+    return flujo;
+  }catch(_){
+    PropertiesService.getScriptProperties().deleteProperty(clave);
+    return null;
+  }
+}
+
+function borrarFlujoAlumnoTelegram(chatId){
+  PropertiesService.getScriptProperties().deleteProperty(
+    claveFlujoAlumnoTelegram(chatId)
+  );
+}
+
+function resumenBorradorAlumnoTelegram(datos){
+  return [
+    '👩‍🎓 Revisa el alumno',
+    '',
+    'Nombre: '+String(datos.nombre||'')+' '+String(datos.apellido||''),
+    'Documento: '+(String(datos.documento||'').trim()||'Sin documento'),
+    'Fecha de nacimiento: '+(
+      String(datos.fechaNacimiento||'').trim()
+        ? formatearFechaTelegram(datos.fechaNacimiento)
+        : 'Sin fecha'
+    ),
+    'Sexo: '+(String(datos.sexo||'').trim()||'Sin indicar'),
+    'Grado: '+(String(datos.grado||'').trim()||'Sin indicar'),
+    'Sección: '+(String(datos.seccion||'').trim()||'Sin indicar'),
+    'Representante: '+(String(datos.representante||'').trim()||'Sin indicar'),
+    'Teléfono: '+(String(datos.telefono||'').trim()||'Sin indicar'),
+    'Dirección: '+(String(datos.direccion||'').trim()||'Sin indicar'),
+    'Observaciones: '+(String(datos.observaciones||'').trim()||'Sin observaciones')
+  ].join('\n');
+}
+
+function botIniciarAlumnoTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+
+  const maestra=obtenerRegistros('MAESTRAS').find(r=>
+    String(r.ID_MAESTRA||'').trim()===enlace.idMaestra
+  );
+
+  guardarFlujoAlumnoTelegram(enlace.chatId,{
+    idMaestra:enlace.idMaestra,
+    paso:'NOMBRE',
+    datos:{
+      grado:String(maestra&&maestra.GRADO||''),
+      seccion:String(maestra&&maestra.SECCION||'')
+    }
+  });
+
+  return {
+    activo:true,
+    paso:'NOMBRE',
+    texto:'➕ Nuevo alumno\n\nEscribe el nombre.\n\nPuedes cancelar con /cancelar.'
+  };
+}
+
+function botSeleccionarSexoAlumnoTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['sexo']);
+
+  const flujo=obtenerFlujoAlumnoTelegram(enlace.chatId);
+  if(!flujo||flujo.paso!=='SEXO'){
+    throw new Error('No hay un alumno esperando la selección de sexo.');
+  }
+
+  const codigo=String(datos.sexo||'').trim().toUpperCase();
+  const opciones={
+    FEMENINO:'Femenino',
+    MASCULINO:'Masculino',
+    OTRO:'Otro',
+    OMITIR:''
+  };
+
+  if(!(codigo in opciones)){
+    throw new Error('La opción de sexo no es válida.');
+  }
+
+  flujo.datos=flujo.datos||{};
+  flujo.datos.sexo=opciones[codigo];
+  flujo.paso='GRADO';
+  guardarFlujoAlumnoTelegram(enlace.chatId,flujo);
+
+  return {
+    activo:true,
+    paso:'GRADO',
+    texto:'🎓 Escribe el grado.\n\nActualmente: '+
+      (String(flujo.datos.grado||'').trim()||'Sin indicar')+
+      '\n\nEscribe un guion - para conservar ese valor.'
+  };
+}
+
+function botProcesarFlujoAlumnoTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['texto']);
+
+  const texto=String(datos.texto||'').trim();
+  const flujo=obtenerFlujoAlumnoTelegram(enlace.chatId);
+
+  if(!flujo)return {activo:false};
+
+  if(texto.toLowerCase()==='/cancelar'){
+    borrarFlujoAlumnoTelegram(enlace.chatId);
+
+    return {
+      activo:false,
+      cancelado:true,
+      texto:'❌ Registro de alumno cancelado.'
+    };
+  }
+
+  flujo.datos=flujo.datos||{};
+
+  if(flujo.paso==='NOMBRE'){
+    if(texto.length<2){
+      throw new Error('El nombre debe tener al menos 2 caracteres.');
+    }
+
+    flujo.datos.nombre=texto;
+    flujo.paso='APELLIDO';
+    guardarFlujoAlumnoTelegram(enlace.chatId,flujo);
+
+    return {
+      activo:true,
+      paso:'APELLIDO',
+      texto:'✍️ Escribe el apellido.'
+    };
+  }
+
+  if(flujo.paso==='APELLIDO'){
+    if(texto.length<2){
+      throw new Error('El apellido debe tener al menos 2 caracteres.');
+    }
+
+    flujo.datos.apellido=texto;
+    flujo.paso='DOCUMENTO';
+    guardarFlujoAlumnoTelegram(enlace.chatId,flujo);
+
+    return {
+      activo:true,
+      paso:'DOCUMENTO',
+      texto:'🪪 Escribe el documento.\n\nEscribe un guion - para dejarlo vacío.'
+    };
+  }
+
+  if(flujo.paso==='DOCUMENTO'){
+    flujo.datos.documento=texto==='-'?'':texto;
+    flujo.paso='FECHA_NACIMIENTO';
+    guardarFlujoAlumnoTelegram(enlace.chatId,flujo);
+
+    return {
+      activo:true,
+      paso:'FECHA_NACIMIENTO',
+      texto:'🎂 Escribe la fecha de nacimiento como DD/MM/AAAA.\n\nEscribe un guion - para dejarla vacía.'
+    };
+  }
+
+  if(flujo.paso==='FECHA_NACIMIENTO'){
+    flujo.datos.fechaNacimiento=
+      texto==='-'?'':normalizarFechaEntradaAgendaTelegram(texto);
+    flujo.paso='SEXO';
+    guardarFlujoAlumnoTelegram(enlace.chatId,flujo);
+
+    return {
+      activo:true,
+      paso:'SEXO',
+      texto:'👧👦 Selecciona el sexo.'
+    };
+  }
+
+  if(flujo.paso==='GRADO'){
+    if(texto!=='-')flujo.datos.grado=texto;
+    flujo.paso='SECCION';
+    guardarFlujoAlumnoTelegram(enlace.chatId,flujo);
+
+    return {
+      activo:true,
+      paso:'SECCION',
+      texto:'🏫 Escribe la sección.\n\nActualmente: '+
+        (String(flujo.datos.seccion||'').trim()||'Sin indicar')+
+        '\n\nEscribe un guion - para conservar ese valor.'
+    };
+  }
+
+  if(flujo.paso==='SECCION'){
+    if(texto!=='-')flujo.datos.seccion=texto;
+    flujo.paso='REPRESENTANTE';
+    guardarFlujoAlumnoTelegram(enlace.chatId,flujo);
+
+    return {
+      activo:true,
+      paso:'REPRESENTANTE',
+      texto:'👤 Escribe el nombre del representante.\n\nEscribe un guion - para dejarlo vacío.'
+    };
+  }
+
+  if(flujo.paso==='REPRESENTANTE'){
+    flujo.datos.representante=texto==='-'?'':texto;
+    flujo.paso='TELEFONO';
+    guardarFlujoAlumnoTelegram(enlace.chatId,flujo);
+
+    return {
+      activo:true,
+      paso:'TELEFONO',
+      texto:'📞 Escribe el teléfono.\n\nEscribe un guion - para dejarlo vacío.'
+    };
+  }
+
+  if(flujo.paso==='TELEFONO'){
+    flujo.datos.telefono=texto==='-'?'':texto;
+    flujo.paso='DIRECCION';
+    guardarFlujoAlumnoTelegram(enlace.chatId,flujo);
+
+    return {
+      activo:true,
+      paso:'DIRECCION',
+      texto:'📍 Escribe la dirección.\n\nEscribe un guion - para dejarla vacía.'
+    };
+  }
+
+  if(flujo.paso==='DIRECCION'){
+    flujo.datos.direccion=texto==='-'?'':texto;
+    flujo.paso='OBSERVACIONES';
+    guardarFlujoAlumnoTelegram(enlace.chatId,flujo);
+
+    return {
+      activo:true,
+      paso:'OBSERVACIONES',
+      texto:'📝 Escribe las observaciones.\n\nEscribe un guion - para dejarlas vacías.'
+    };
+  }
+
+  if(flujo.paso==='OBSERVACIONES'){
+    flujo.datos.observaciones=texto==='-'?'':texto;
+    flujo.paso='CONFIRMAR';
+    guardarFlujoAlumnoTelegram(enlace.chatId,flujo);
+
+    return {
+      activo:true,
+      paso:'CONFIRMAR',
+      texto:resumenBorradorAlumnoTelegram(flujo.datos)
+    };
+  }
+
+  return {
+    activo:true,
+    paso:String(flujo.paso||''),
+    texto:'Continúa con los botones mostrados o escribe /cancelar.'
+  };
+}
+
+function botConfirmarAlumnoTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  const flujo=obtenerFlujoAlumnoTelegram(enlace.chatId);
+
+  if(!flujo||flujo.paso!=='CONFIRMAR'){
+    throw new Error('No hay un alumno pendiente de confirmación.');
+  }
+
+  const d=flujo.datos||{};
+
+  if(!d.nombre||!d.apellido){
+    throw new Error('Faltan el nombre o el apellido.');
+  }
+
+  const idAlumno=generarId('ALU');
+  const hoja=obtenerHoja('ALUMNOS');
+  const fila=hoja.getLastRow()+1;
+
+  hoja.getRange(fila,1,1,15).setValues([[
+    idAlumno,
+    enlace.idMaestra,
+    limpiarTexto(d.nombre),
+    limpiarTexto(d.apellido),
+    limpiarTexto(d.documento||''),
+    limpiarTexto(d.fechaNacimiento||''),
+    limpiarTexto(d.sexo||''),
+    limpiarTexto(d.grado||''),
+    limpiarTexto(d.seccion||''),
+    limpiarTexto(d.representante||''),
+    limpiarTexto(d.telefono||''),
+    limpiarTexto(d.direccion||''),
+    limpiarTexto(d.observaciones||''),
+    'ACTIVO',
+    new Date()
+  ]]);
+
+  if(d.fechaNacimiento){
+    hoja.getRange(fila,6).setNumberFormat('@');
+    hoja.getRange(fila,6).setValue(String(d.fechaNacimiento));
+  }
+
+  registrarAuditoria(
+    enlace.idMaestra,
+    'CREAR',
+    'ALUMNOS',
+    'Alumno creado desde Telegram: '+
+      limpiarTexto(d.nombre)+' '+limpiarTexto(d.apellido)
+  );
+
+  borrarFlujoAlumnoTelegram(enlace.chatId);
+
+  return {
+    activo:false,
+    guardado:true,
+    idAlumno:idAlumno,
+    texto:'✅ Alumno guardado correctamente.\n\n'+
+      resumenBorradorAlumnoTelegram(d)
+  };
+}
+
+function botCancelarFlujoAlumnoTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  borrarFlujoAlumnoTelegram(enlace.chatId);
+
+  return {
+    activo:false,
+    cancelado:true,
+    texto:'❌ Registro de alumno cancelado.'
+  };
+}
+
+
+function claveFlujoCumpleanosTelegram(chatId){
+  return 'TELEGRAM_CUMPLEANOS_FLUJO_'+String(chatId).trim();
+}
+
+function guardarFlujoCumpleanosTelegram(chatId,flujo){
+  const contenido=Object.assign({},flujo,{actualizado:Date.now()});
+  PropertiesService.getScriptProperties().setProperty(
+    claveFlujoCumpleanosTelegram(chatId),
+    JSON.stringify(contenido)
+  );
+  return contenido;
+}
+
+function obtenerFlujoCumpleanosTelegram(chatId){
+  const clave=claveFlujoCumpleanosTelegram(chatId);
+  const valor=PropertiesService.getScriptProperties().getProperty(clave);
+
+  if(!valor)return null;
+
+  try{
+    const flujo=JSON.parse(valor);
+
+    if(Date.now()-Number(flujo.actualizado||0)>60*60*1000){
+      PropertiesService.getScriptProperties().deleteProperty(clave);
+      return null;
+    }
+
+    return flujo;
+  }catch(_){
+    PropertiesService.getScriptProperties().deleteProperty(clave);
+    return null;
+  }
+}
+
+function borrarFlujoCumpleanosTelegram(chatId){
+  PropertiesService.getScriptProperties().deleteProperty(
+    claveFlujoCumpleanosTelegram(chatId)
+  );
+}
+
+function resumenBorradorCumpleanosTelegram(datos){
+  return [
+    '🎂 Revisa el cumpleaños',
+    '',
+    'Alumno: '+String(datos.nombreAlumno||''),
+    'Fecha de nacimiento: '+formatearFechaTelegram(datos.fechaNacimiento),
+    'Notas: '+(String(datos.notas||'').trim()||'Sin notas')
+  ].join('\n');
+}
+
+function botIniciarCumpleanosTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+
+  const alumnos=obtenerRegistrosConFila('ALUMNOS')
+    .filter(r=>
+      String(r.ID_MAESTRA||'').trim()===enlace.idMaestra&&
+      String(r.ESTADO||'').trim().toUpperCase()!=='ELIMINADO'
+    )
+    .map(r=>({
+      idAlumno:String(r.ID_ALUMNO||''),
+      nombre:(String(r.NOMBRE||'')+' '+String(r.APELLIDO||'')).trim(),
+      grado:String(r.GRADO||''),
+      seccion:String(r.SECCION||''),
+      fechaNacimiento:formatearFechaParaFormulario(r.FECHA_NACIMIENTO),
+      notas:String(r.OBSERVACIONES||'')
+    }))
+    .sort((a,b)=>a.nombre.localeCompare(b.nombre));
+
+  guardarFlujoCumpleanosTelegram(enlace.chatId,{
+    idMaestra:enlace.idMaestra,
+    paso:'ALUMNO',
+    datos:{}
+  });
+
+  return {
+    activo:true,
+    paso:'ALUMNO',
+    alumnos:alumnos,
+    texto:'🎂 Selecciona el alumno cuyo cumpleaños deseas configurar.'
+  };
+}
+
+function botSeleccionarAlumnoCumpleanosTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['idAlumno']);
+
+  const flujo=obtenerFlujoCumpleanosTelegram(enlace.chatId);
+  if(!flujo){
+    throw new Error('No hay una configuración de cumpleaños activa.');
+  }
+
+  const alumno=obtenerRegistrosConFila('ALUMNOS').find(r=>
+    String(r.ID_ALUMNO||'').trim()===String(datos.idAlumno||'').trim()&&
+    String(r.ID_MAESTRA||'').trim()===enlace.idMaestra&&
+    String(r.ESTADO||'').trim().toUpperCase()!=='ELIMINADO'
+  );
+
+  if(!alumno){
+    throw new Error('El alumno no pertenece a esta maestra.');
+  }
+
+  flujo.datos=flujo.datos||{};
+  flujo.datos.idAlumno=String(alumno.ID_ALUMNO||'');
+  flujo.datos.nombreAlumno=(
+    String(alumno.NOMBRE||'')+' '+String(alumno.APELLIDO||'')
+  ).trim();
+  flujo.datos.fechaActual=formatearFechaParaFormulario(alumno.FECHA_NACIMIENTO);
+  flujo.datos.notasActuales=String(alumno.OBSERVACIONES||'');
+  flujo.paso='FECHA_NACIMIENTO';
+
+  guardarFlujoCumpleanosTelegram(enlace.chatId,flujo);
+
+  return {
+    activo:true,
+    paso:'FECHA_NACIMIENTO',
+    tieneFecha:Boolean(flujo.datos.fechaActual),
+    texto:[
+      '📅 Escribe la fecha de nacimiento como DD/MM/AAAA.',
+      flujo.datos.fechaActual
+        ? '\nFecha actual: '+formatearFechaTelegram(flujo.datos.fechaActual)
+        : '',
+      '\nTambién puedes pulsar Quitar fecha.'
+    ].join('')
+  };
+}
+
+function botProcesarFlujoCumpleanosTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['texto']);
+
+  const texto=String(datos.texto||'').trim();
+  const flujo=obtenerFlujoCumpleanosTelegram(enlace.chatId);
+
+  if(!flujo)return {activo:false};
+
+  if(texto.toLowerCase()==='/cancelar'){
+    borrarFlujoCumpleanosTelegram(enlace.chatId);
+
+    return {
+      activo:false,
+      cancelado:true,
+      texto:'❌ Configuración de cumpleaños cancelada.'
+    };
+  }
+
+  flujo.datos=flujo.datos||{};
+
+  if(flujo.paso==='FECHA_NACIMIENTO'){
+    flujo.datos.fechaNacimiento=normalizarFechaEntradaAgendaTelegram(texto);
+    flujo.paso='NOTAS';
+    guardarFlujoCumpleanosTelegram(enlace.chatId,flujo);
+
+    return {
+      activo:true,
+      paso:'NOTAS',
+      texto:'📝 Escribe una nota para el cumpleaños.\n\nEscribe un guion - para conservar las notas actuales.'
+    };
+  }
+
+  if(flujo.paso==='NOTAS'){
+    flujo.datos.notas=
+      texto==='-'
+        ?String(flujo.datos.notasActuales||'')
+        :texto;
+
+    flujo.paso='CONFIRMAR';
+    guardarFlujoCumpleanosTelegram(enlace.chatId,flujo);
+
+    return {
+      activo:true,
+      paso:'CONFIRMAR',
+      texto:resumenBorradorCumpleanosTelegram(flujo.datos)
+    };
+  }
+
+  return {
+    activo:true,
+    paso:String(flujo.paso||''),
+    texto:'Continúa con los botones mostrados o escribe /cancelar.'
+  };
+}
+
+function botConfirmarCumpleanosTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  const flujo=obtenerFlujoCumpleanosTelegram(enlace.chatId);
+
+  if(!flujo||flujo.paso!=='CONFIRMAR'){
+    throw new Error('No hay un cumpleaños pendiente de confirmación.');
+  }
+
+  const d=flujo.datos||{};
+  if(!d.idAlumno||!d.fechaNacimiento){
+    throw new Error('Faltan datos del cumpleaños.');
+  }
+
+  const hoja=obtenerHoja('ALUMNOS');
+  const alumno=obtenerRegistrosConFila('ALUMNOS').find(r=>
+    String(r.ID_ALUMNO||'').trim()===String(d.idAlumno||'').trim()&&
+    String(r.ID_MAESTRA||'').trim()===enlace.idMaestra
+  );
+
+  if(!alumno){
+    throw new Error('El alumno ya no está disponible.');
+  }
+
+  hoja.getRange(alumno.__fila,6).setNumberFormat('@');
+  hoja.getRange(alumno.__fila,6).setValue(String(d.fechaNacimiento));
+  hoja.getRange(alumno.__fila,13).setValue(String(d.notas||''));
+
+  registrarAuditoria(
+    enlace.idMaestra,
+    'EDITAR',
+    'CUMPLEANOS',
+    'Cumpleaños actualizado desde Telegram: '+String(d.nombreAlumno||'Alumno')
+  );
+
+  borrarFlujoCumpleanosTelegram(enlace.chatId);
+
+  return {
+    activo:false,
+    guardado:true,
+    texto:'✅ Cumpleaños actualizado correctamente.\n\n'+
+      resumenBorradorCumpleanosTelegram(d)
+  };
+}
+
+function botQuitarCumpleanosTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  const flujo=obtenerFlujoCumpleanosTelegram(enlace.chatId);
+
+  if(!flujo||!flujo.datos||!flujo.datos.idAlumno){
+    throw new Error('Primero debes seleccionar un alumno.');
+  }
+
+  const alumno=obtenerRegistrosConFila('ALUMNOS').find(r=>
+    String(r.ID_ALUMNO||'').trim()===String(flujo.datos.idAlumno||'').trim()&&
+    String(r.ID_MAESTRA||'').trim()===enlace.idMaestra
+  );
+
+  if(!alumno){
+    throw new Error('El alumno ya no está disponible.');
+  }
+
+  const hoja=obtenerHoja('ALUMNOS');
+  hoja.getRange(alumno.__fila,6).clearContent();
+
+  registrarAuditoria(
+    enlace.idMaestra,
+    'EDITAR',
+    'CUMPLEANOS',
+    'Fecha de cumpleaños eliminada desde Telegram: '+
+      String(flujo.datos.nombreAlumno||'Alumno')
+  );
+
+  borrarFlujoCumpleanosTelegram(enlace.chatId);
+
+  return {
+    activo:false,
+    eliminado:true,
+    texto:'✅ Fecha de cumpleaños eliminada correctamente.'
+  };
+}
+
+function botCancelarFlujoCumpleanosTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  borrarFlujoCumpleanosTelegram(enlace.chatId);
+
+  return {
+    activo:false,
+    cancelado:true,
+    texto:'❌ Configuración de cumpleaños cancelada.'
+  };
+}
+
+
+function contarPorEstadoTelegram(registros,campo){
+  const conteo={};
+
+  registros.forEach(r=>{
+    const valor=String(r[campo]||'SIN DEFINIR').trim().toUpperCase()||'SIN DEFINIR';
+    conteo[valor]=(conteo[valor]||0)+1;
+  });
+
+  return conteo;
+}
+
+function porcentajeTelegram(parte,total){
+  if(!total)return 0;
+  return Math.round((Number(parte||0)/Number(total))*100);
+}
+
+function botGenerarReporteTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['tipo']);
+
+  const tipo=String(datos.tipo||'').trim().toUpperCase();
+  const zona=obtenerZonaHorariaAulaMagica();
+  const hoy=Utilities.formatDate(new Date(),zona,'yyyy-MM-dd');
+  const idMaestra=enlace.idMaestra;
+
+  const alumnos=obtenerRegistros('ALUMNOS').filter(r=>
+    String(r.ID_MAESTRA||'').trim()===idMaestra&&
+    String(r.ESTADO||'').trim().toUpperCase()!=='ELIMINADO'
+  );
+
+  if(tipo==='GENERAL'){
+    const asistencia=obtenerRegistros('ASISTENCIA').filter(r=>
+      String(r.ID_MAESTRA||'').trim()===idMaestra&&
+      normalizarFechaAsistencia(r.FECHA)===hoy
+    );
+
+    const calificaciones=obtenerRegistros('CALIFICACIONES').filter(r=>
+      String(r.ID_MAESTRA||'').trim()===idMaestra
+    );
+
+    const planesPendientes=obtenerRegistros('PLANIFICACION').filter(r=>
+      String(r.ID_MAESTRA||'').trim()===idMaestra&&
+      String(r.ESTADO||'').trim().toUpperCase()!=='COMPLETADA'&&
+      normalizarFechaTextoTelegram(r.FECHA)>=hoy
+    ).length;
+
+    const reunionesPendientes=obtenerRegistros('REUNIONES').filter(r=>
+      String(r.ID_MAESTRA||'').trim()===idMaestra&&
+      !['REALIZADA','CANCELADA'].includes(
+        String(r.ESTADO||'').trim().toUpperCase()
+      )&&
+      normalizarFechaTextoTelegram(r.FECHA)>=hoy
+    ).length;
+
+    const eventosPendientes=obtenerRegistrosAgenda().filter(r=>
+      String(r.ID_MAESTRA||'').trim()===idMaestra&&
+      String(r.ESTADO||'').trim().toUpperCase()==='PENDIENTE'&&
+      normalizarFechaVisibleAgenda(r.FECHA)>=hoy
+    ).length;
+
+    const estados=contarPorEstadoTelegram(asistencia,'ESTADO');
+    const promedios=calificaciones.map(r=>{
+      const nota=Number(r.CALIFICACION||0);
+      const maxima=Number(r.CALIFICACION_MAXIMA||0);
+      return maxima>0?(nota/maxima)*100:null;
+    }).filter(v=>v!==null&&Number.isFinite(v));
+
+    const promedio=promedios.length
+      ?Math.round(promedios.reduce((a,b)=>a+b,0)/promedios.length)
+      :0;
+
+    return {
+      texto:[
+        '📊 Reporte general',
+        '',
+        'Fecha: '+formatearFechaTelegram(hoy),
+        '👩‍🎓 Alumnos activos: '+alumnos.length,
+        '',
+        '✅ Asistencia de hoy',
+        'Presentes: '+Number(estados.PRESENTE||0),
+        'Ausentes: '+Number(estados.AUSENTE||0),
+        'Tardanzas: '+Number(estados.TARDE||0),
+        'Justificados: '+Number(estados.JUSTIFICADO||0),
+        'Sin registrar: '+Math.max(0,alumnos.length-asistencia.length),
+        '',
+        '📝 Calificaciones',
+        'Registros: '+calificaciones.length,
+        'Promedio general: '+promedio+'%',
+        '',
+        '📚 Planificaciones próximas: '+planesPendientes,
+        '🤝 Reuniones próximas: '+reunionesPendientes,
+        '📅 Eventos pendientes: '+eventosPendientes
+      ].join('\n')
+    };
+  }
+
+  if(tipo==='ASISTENCIA'){
+    const registros=obtenerRegistros('ASISTENCIA').filter(r=>
+      String(r.ID_MAESTRA||'').trim()===idMaestra&&
+      normalizarFechaAsistencia(r.FECHA)===hoy
+    );
+
+    const estados=contarPorEstadoTelegram(registros,'ESTADO');
+    const presentes=Number(estados.PRESENTE||0);
+    const ausentes=Number(estados.AUSENTE||0);
+    const tarde=Number(estados.TARDE||0);
+    const justificados=Number(estados.JUSTIFICADO||0);
+
+    return {
+      texto:[
+        '✅ Reporte de asistencia',
+        '',
+        'Fecha: '+formatearFechaTelegram(hoy),
+        'Alumnos activos: '+alumnos.length,
+        'Registros guardados: '+registros.length,
+        '',
+        '🟢 Presentes: '+presentes,
+        '🔴 Ausentes: '+ausentes,
+        '⏰ Tardanzas: '+tarde,
+        '📄 Justificados: '+justificados,
+        '➖ Sin registrar: '+Math.max(0,alumnos.length-registros.length),
+        '',
+        'Porcentaje de presencia: '+
+          porcentajeTelegram(presentes,alumnos.length)+'%'
+      ].join('\n')
+    };
+  }
+
+  if(tipo==='CALIFICACIONES'){
+    const registros=obtenerRegistros('CALIFICACIONES').filter(r=>
+      String(r.ID_MAESTRA||'').trim()===idMaestra
+    );
+
+    const materias={};
+    const porcentajes=[];
+
+    registros.forEach(r=>{
+      const materia=String(r.ASIGNATURA||'Sin asignatura').trim();
+      materias[materia]=(materias[materia]||0)+1;
+
+      const nota=Number(r.CALIFICACION||0);
+      const maxima=Number(r.CALIFICACION_MAXIMA||0);
+
+      if(maxima>0){
+        porcentajes.push((nota/maxima)*100);
+      }
+    });
+
+    const promedio=porcentajes.length
+      ?Math.round(porcentajes.reduce((a,b)=>a+b,0)/porcentajes.length)
+      :0;
+
+    const principales=Object.keys(materias)
+      .sort((a,b)=>materias[b]-materias[a])
+      .slice(0,5)
+      .map(materia=>'• '+materia+': '+materias[materia])
+      .join('\n');
+
+    return {
+      texto:[
+        '📝 Reporte de calificaciones',
+        '',
+        'Registros: '+registros.length,
+        'Promedio general: '+promedio+'%',
+        '',
+        'Materias:',
+        principales||'Sin registros'
+      ].join('\n')
+    };
+  }
+
+  if(tipo==='PENDIENTES'){
+    const planes=obtenerRegistros('PLANIFICACION').filter(r=>
+      String(r.ID_MAESTRA||'').trim()===idMaestra&&
+      String(r.ESTADO||'').trim().toUpperCase()!=='COMPLETADA'&&
+      normalizarFechaTextoTelegram(r.FECHA)>=hoy
+    );
+
+    const reuniones=obtenerRegistros('REUNIONES').filter(r=>
+      String(r.ID_MAESTRA||'').trim()===idMaestra&&
+      !['REALIZADA','CANCELADA'].includes(
+        String(r.ESTADO||'').trim().toUpperCase()
+      )&&
+      normalizarFechaTextoTelegram(r.FECHA)>=hoy
+    );
+
+    const agenda=obtenerRegistrosAgenda().filter(r=>
+      String(r.ID_MAESTRA||'').trim()===idMaestra&&
+      String(r.ESTADO||'').trim().toUpperCase()==='PENDIENTE'&&
+      normalizarFechaVisibleAgenda(r.FECHA)>=hoy
+    );
+
+    return {
+      texto:[
+        '📌 Reporte de pendientes',
+        '',
+        '📚 Planificaciones: '+planes.length,
+        '🤝 Reuniones: '+reuniones.length,
+        '📅 Eventos de agenda: '+agenda.length,
+        '',
+        'Total pendiente: '+(planes.length+reuniones.length+agenda.length)
+      ].join('\n')
+    };
+  }
+
+  throw new Error('El tipo de reporte no es válido.');
+}
+
+
+function claveFlujoPerfilTelegram(chatId){
+  return 'TELEGRAM_PERFIL_FLUJO_'+String(chatId).trim();
+}
+
+function guardarFlujoPerfilTelegram(chatId,flujo){
+  const contenido=Object.assign({},flujo,{actualizado:Date.now()});
+  PropertiesService.getScriptProperties().setProperty(
+    claveFlujoPerfilTelegram(chatId),
+    JSON.stringify(contenido)
+  );
+  return contenido;
+}
+
+function obtenerFlujoPerfilTelegram(chatId){
+  const clave=claveFlujoPerfilTelegram(chatId);
+  const valor=PropertiesService.getScriptProperties().getProperty(clave);
+
+  if(!valor)return null;
+
+  try{
+    const flujo=JSON.parse(valor);
+
+    if(Date.now()-Number(flujo.actualizado||0)>60*60*1000){
+      PropertiesService.getScriptProperties().deleteProperty(clave);
+      return null;
+    }
+
+    return flujo;
+  }catch(_){
+    PropertiesService.getScriptProperties().deleteProperty(clave);
+    return null;
+  }
+}
+
+function borrarFlujoPerfilTelegram(chatId){
+  PropertiesService.getScriptProperties().deleteProperty(
+    claveFlujoPerfilTelegram(chatId)
+  );
+}
+
+function obtenerPerfilMaestraPorIdTelegram(idMaestra){
+  const registro=obtenerRegistrosConFila('MAESTRAS').find(r=>
+    String(r.ID_MAESTRA||'').trim()===String(idMaestra||'').trim()
+  );
+
+  if(!registro){
+    throw new Error('No se encontró el perfil de la maestra.');
+  }
+
+  return {
+    idMaestra:String(registro.ID_MAESTRA||''),
+    nombre:String(registro.NOMBRE||''),
+    apellido:String(registro.APELLIDO||''),
+    correo:String(registro.CORREO||''),
+    usuario:String(registro.USUARIO||''),
+    grado:String(registro.GRADO||''),
+    seccion:String(registro.SECCION||''),
+    __fila:Number(registro.__fila||0)
+  };
+}
+
+function textoPerfilTelegram(perfil){
+  return [
+    '⚙️ Perfil de la maestra',
+    '',
+    'Nombre: '+String(perfil.nombre||'')+' '+String(perfil.apellido||''),
+    'Correo: '+String(perfil.correo||''),
+    'Usuario: '+String(perfil.usuario||''),
+    'Grado: '+(String(perfil.grado||'').trim()||'Sin indicar'),
+    'Sección: '+(String(perfil.seccion||'').trim()||'Sin indicar')
+  ].join('\n');
+}
+
+function botObtenerPerfilTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  const perfil=obtenerPerfilMaestraPorIdTelegram(enlace.idMaestra);
+
+  return {
+    perfil:perfil,
+    texto:textoPerfilTelegram(perfil)
+  };
+}
+
+function botIniciarPerfilTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  const perfil=obtenerPerfilMaestraPorIdTelegram(enlace.idMaestra);
+
+  guardarFlujoPerfilTelegram(enlace.chatId,{
+    idMaestra:enlace.idMaestra,
+    paso:'NOMBRE',
+    datos:{
+      nombre:perfil.nombre,
+      apellido:perfil.apellido,
+      grado:perfil.grado,
+      seccion:perfil.seccion
+    }
+  });
+
+  return {
+    activo:true,
+    paso:'NOMBRE',
+    texto:[
+      '✏️ Editar perfil',
+      '',
+      'Nombre actual: '+perfil.nombre,
+      '',
+      'Escribe el nuevo nombre.',
+      'Escribe un guion - para conservarlo.',
+      '',
+      'Puedes cancelar con /cancelar.'
+    ].join('\n')
+  };
+}
+
+function botProcesarFlujoPerfilTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['texto']);
+
+  const texto=String(datos.texto||'').trim();
+  const flujo=obtenerFlujoPerfilTelegram(enlace.chatId);
+
+  if(!flujo)return {activo:false};
+
+  if(texto.toLowerCase()==='/cancelar'){
+    borrarFlujoPerfilTelegram(enlace.chatId);
+
+    return {
+      activo:false,
+      cancelado:true,
+      texto:'❌ Edición del perfil cancelada.'
+    };
+  }
+
+  flujo.datos=flujo.datos||{};
+
+  if(flujo.paso==='NOMBRE'){
+    if(texto!=='-'){
+      if(texto.length<2)throw new Error('El nombre debe tener al menos 2 caracteres.');
+      flujo.datos.nombre=texto;
+    }
+
+    flujo.paso='APELLIDO';
+    guardarFlujoPerfilTelegram(enlace.chatId,flujo);
+
+    return {
+      activo:true,
+      paso:'APELLIDO',
+      texto:[
+        'Apellido actual: '+String(flujo.datos.apellido||''),
+        '',
+        'Escribe el nuevo apellido.',
+        'Escribe un guion - para conservarlo.'
+      ].join('\n')
+    };
+  }
+
+  if(flujo.paso==='APELLIDO'){
+    if(texto!=='-'){
+      if(texto.length<2)throw new Error('El apellido debe tener al menos 2 caracteres.');
+      flujo.datos.apellido=texto;
+    }
+
+    flujo.paso='GRADO';
+    guardarFlujoPerfilTelegram(enlace.chatId,flujo);
+
+    return {
+      activo:true,
+      paso:'GRADO',
+      texto:[
+        'Grado actual: '+(String(flujo.datos.grado||'').trim()||'Sin indicar'),
+        '',
+        'Escribe el nuevo grado.',
+        'Escribe un guion - para conservarlo.'
+      ].join('\n')
+    };
+  }
+
+  if(flujo.paso==='GRADO'){
+    if(texto!=='-')flujo.datos.grado=texto;
+
+    flujo.paso='SECCION';
+    guardarFlujoPerfilTelegram(enlace.chatId,flujo);
+
+    return {
+      activo:true,
+      paso:'SECCION',
+      texto:[
+        'Sección actual: '+(String(flujo.datos.seccion||'').trim()||'Sin indicar'),
+        '',
+        'Escribe la nueva sección.',
+        'Escribe un guion - para conservarla.'
+      ].join('\n')
+    };
+  }
+
+  if(flujo.paso==='SECCION'){
+    if(texto!=='-')flujo.datos.seccion=texto;
+
+    flujo.paso='CONFIRMAR';
+    guardarFlujoPerfilTelegram(enlace.chatId,flujo);
+
+    return {
+      activo:true,
+      paso:'CONFIRMAR',
+      texto:[
+        '⚙️ Revisa el perfil',
+        '',
+        'Nombre: '+String(flujo.datos.nombre||'')+' '+String(flujo.datos.apellido||''),
+        'Grado: '+(String(flujo.datos.grado||'').trim()||'Sin indicar'),
+        'Sección: '+(String(flujo.datos.seccion||'').trim()||'Sin indicar')
+      ].join('\n')
+    };
+  }
+
+  return {
+    activo:true,
+    paso:String(flujo.paso||''),
+    texto:'Continúa con los botones mostrados o escribe /cancelar.'
+  };
+}
+
+function botConfirmarPerfilTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  const flujo=obtenerFlujoPerfilTelegram(enlace.chatId);
+
+  if(!flujo||flujo.paso!=='CONFIRMAR'){
+    throw new Error('No hay un perfil pendiente de confirmación.');
+  }
+
+  const d=flujo.datos||{};
+
+  if(!d.nombre||!d.apellido){
+    throw new Error('Faltan el nombre o el apellido.');
+  }
+
+  const perfil=obtenerPerfilMaestraPorIdTelegram(enlace.idMaestra);
+  const hoja=obtenerHoja('MAESTRAS');
+
+  hoja.getRange(perfil.__fila,2,1,2).setValues([[
+    limpiarTexto(d.nombre),
+    limpiarTexto(d.apellido)
+  ]]);
+
+  hoja.getRange(perfil.__fila,7,1,2).setValues([[
+    limpiarTexto(d.grado||''),
+    limpiarTexto(d.seccion||'')
+  ]]);
+
+  registrarAuditoria(
+    enlace.idMaestra,
+    'EDITAR',
+    'PERFIL',
+    'Perfil actualizado desde Telegram'
+  );
+
+  borrarFlujoPerfilTelegram(enlace.chatId);
+
+  const actualizado=obtenerPerfilMaestraPorIdTelegram(enlace.idMaestra);
+
+  return {
+    activo:false,
+    guardado:true,
+    perfil:actualizado,
+    texto:'✅ Perfil actualizado correctamente.\n\n'+textoPerfilTelegram(actualizado)
+  };
+}
+
+function botCancelarFlujoPerfilTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  borrarFlujoPerfilTelegram(enlace.chatId);
+
+  return {
+    activo:false,
+    cancelado:true,
+    texto:'❌ Edición del perfil cancelada.'
+  };
+}
+
+
+function botListarEventosGestionTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  const hoy=Utilities.formatDate(
+    new Date(),
+    obtenerZonaHorariaAulaMagica(),
+    'yyyy-MM-dd'
+  );
+
+  const eventos=obtenerRegistrosAgenda()
+    .filter(r=>
+      String(r.ID_MAESTRA||'').trim()===enlace.idMaestra&&
+      normalizarFechaVisibleAgenda(r.FECHA)>=hoy
+    )
+    .map(r=>({
+      idEvento:String(r.ID_EVENTO||''),
+      titulo:String(r.TITULO||''),
+      tipo:String(r.TIPO||'OTRO').toUpperCase(),
+      fecha:normalizarFechaVisibleAgenda(r.FECHA),
+      hora:normalizarHoraVisibleAgenda(r.HORA),
+      descripcion:String(r.DESCRIPCION||''),
+      estado:String(r.ESTADO||'PENDIENTE').toUpperCase()
+    }))
+    .sort((a,b)=>
+      (a.fecha+' '+a.hora).localeCompare(b.fecha+' '+b.hora)
+    )
+    .slice(0,20);
+
+  return {eventos:eventos};
+}
+
+function botObtenerEventoGestionTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['idEvento']);
+
+  const evento=obtenerRegistrosAgenda().find(r=>
+    String(r.ID_EVENTO||'').trim()===String(datos.idEvento||'').trim()&&
+    String(r.ID_MAESTRA||'').trim()===enlace.idMaestra
+  );
+
+  if(!evento)throw new Error('No se encontró el evento.');
+
+  const resultado={
+    idEvento:String(evento.ID_EVENTO||''),
+    titulo:String(evento.TITULO||''),
+    tipo:String(evento.TIPO||'OTRO').toUpperCase(),
+    fecha:normalizarFechaVisibleAgenda(evento.FECHA),
+    hora:normalizarHoraVisibleAgenda(evento.HORA),
+    descripcion:String(evento.DESCRIPCION||''),
+    estado:String(evento.ESTADO||'PENDIENTE').toUpperCase()
+  };
+
+  return {
+    evento:resultado,
+    texto:[
+      '📅 Evento',
+      '',
+      'Título: '+resultado.titulo,
+      'Fecha: '+formatearFechaTelegram(resultado.fecha),
+      'Hora: '+resultado.hora,
+      'Tipo: '+capitalizarTelegram(resultado.tipo),
+      'Estado: '+capitalizarTelegram(resultado.estado),
+      'Descripción: '+(resultado.descripcion||'Sin descripción')
+    ].join('\n')
+  };
+}
+
+function botCambiarEstadoEventoTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['idEvento','estado']);
+
+  const estado=String(datos.estado||'').trim().toUpperCase();
+  const permitidos=['PENDIENTE','COMPLETADO','CANCELADO'];
+  if(!permitidos.includes(estado)){
+    throw new Error('El estado del evento no es válido.');
+  }
+
+  const hoja=obtenerHoja('AGENDA');
+  const evento=obtenerRegistrosAgenda().find(r=>
+    String(r.ID_EVENTO||'').trim()===String(datos.idEvento||'').trim()&&
+    String(r.ID_MAESTRA||'').trim()===enlace.idMaestra
+  );
+
+  if(!evento)throw new Error('No se encontró el evento.');
+
+  hoja.getRange(evento.__fila,8).setValue(estado);
+
+  registrarAuditoria(
+    enlace.idMaestra,
+    'EDITAR',
+    'AGENDA',
+    'Evento '+String(evento.TITULO||'')+' cambiado a '+estado+' desde Telegram'
+  );
+
+  return {
+    actualizado:true,
+    texto:'✅ El evento "'+String(evento.TITULO||'')+
+      '" quedó como '+estado.toLowerCase()+'.'
+  };
+}
+
+function botEliminarEventoTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['idEvento']);
+
+  const hoja=obtenerHoja('AGENDA');
+  const evento=obtenerRegistrosAgenda().find(r=>
+    String(r.ID_EVENTO||'').trim()===String(datos.idEvento||'').trim()&&
+    String(r.ID_MAESTRA||'').trim()===enlace.idMaestra
+  );
+
+  if(!evento)throw new Error('No se encontró el evento.');
+
+  const titulo=String(evento.TITULO||'');
+  hoja.deleteRow(evento.__fila);
+
+  registrarAuditoria(
+    enlace.idMaestra,
+    'ELIMINAR',
+    'AGENDA',
+    'Evento eliminado desde Telegram: '+titulo
+  );
+
+  return {
+    eliminado:true,
+    texto:'🗑️ Evento eliminado correctamente: '+titulo
+  };
+}
+
+
+function botListarReunionesGestionTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  const hoy=Utilities.formatDate(
+    new Date(),
+    obtenerZonaHorariaAulaMagica(),
+    'yyyy-MM-dd'
+  );
+
+  const reuniones=obtenerRegistrosConFila('REUNIONES')
+    .filter(r=>
+      String(r.ID_MAESTRA||'').trim()===enlace.idMaestra&&
+      normalizarFechaTextoTelegram(r.FECHA)>=hoy
+    )
+    .map(r=>({
+      idReunion:String(r.ID_REUNION||''),
+      titulo:String(r.TITULO||''),
+      tipo:String(r.TIPO||'OTRA').toUpperCase(),
+      fecha:normalizarFechaTextoTelegram(r.FECHA),
+      hora:normalizarHoraVisibleAgenda(r.HORA),
+      lugar:String(r.LUGAR||''),
+      descripcion:String(r.DESCRIPCION||''),
+      estado:String(r.ESTADO||'PROGRAMADA').toUpperCase()
+    }))
+    .sort((a,b)=>
+      (a.fecha+' '+a.hora).localeCompare(b.fecha+' '+b.hora)
+    )
+    .slice(0,20);
+
+  return {reuniones:reuniones};
+}
+
+function botObtenerReunionGestionTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['idReunion']);
+
+  const reunion=obtenerRegistrosConFila('REUNIONES').find(r=>
+    String(r.ID_REUNION||'').trim()===String(datos.idReunion||'').trim()&&
+    String(r.ID_MAESTRA||'').trim()===enlace.idMaestra
+  );
+
+  if(!reunion)throw new Error('No se encontró la reunión.');
+
+  const resultado={
+    idReunion:String(reunion.ID_REUNION||''),
+    titulo:String(reunion.TITULO||''),
+    tipo:String(reunion.TIPO||'OTRA').toUpperCase(),
+    fecha:normalizarFechaTextoTelegram(reunion.FECHA),
+    hora:normalizarHoraVisibleAgenda(reunion.HORA),
+    lugar:String(reunion.LUGAR||''),
+    descripcion:String(reunion.DESCRIPCION||''),
+    estado:String(reunion.ESTADO||'PROGRAMADA').toUpperCase()
+  };
+
+  return {
+    reunion:resultado,
+    texto:[
+      '🤝 Reunión',
+      '',
+      'Título: '+resultado.titulo,
+      'Fecha: '+formatearFechaTelegram(resultado.fecha),
+      'Hora: '+resultado.hora,
+      'Tipo: '+capitalizarTelegram(resultado.tipo),
+      'Lugar: '+(resultado.lugar||'Sin indicar'),
+      'Estado: '+capitalizarTelegram(resultado.estado),
+      'Descripción: '+(resultado.descripcion||'Sin descripción')
+    ].join('\n')
+  };
+}
+
+function botCambiarEstadoReunionTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['idReunion','estado']);
+
+  const estado=String(datos.estado||'').trim().toUpperCase();
+  const permitidos=['PROGRAMADA','REALIZADA','CANCELADA'];
+
+  if(!permitidos.includes(estado)){
+    throw new Error('El estado de la reunión no es válido.');
+  }
+
+  const hoja=obtenerHoja('REUNIONES');
+  const reunion=obtenerRegistrosConFila('REUNIONES').find(r=>
+    String(r.ID_REUNION||'').trim()===String(datos.idReunion||'').trim()&&
+    String(r.ID_MAESTRA||'').trim()===enlace.idMaestra
+  );
+
+  if(!reunion)throw new Error('No se encontró la reunión.');
+
+  // La columna 9 es ACUERDOS y la columna 10 es ESTADO.
+  // La versión 4.2.0 escribía por error el estado dentro de ACUERDOS.
+  hoja.getRange(reunion.__fila,10).setValue(estado);
+
+  // Repara automáticamente el dato incorrecto dejado por la versión anterior.
+  const acuerdoActual=String(
+    hoja.getRange(reunion.__fila,9).getDisplayValue()||''
+  ).trim().toUpperCase();
+
+  if(acuerdoActual===estado){
+    hoja.getRange(reunion.__fila,9).clearContent();
+  }
+
+  registrarAuditoria(
+    enlace.idMaestra,
+    'EDITAR',
+    'REUNIONES',
+    'Reunión '+String(reunion.TITULO||'')+' cambiada a '+estado+' desde Telegram'
+  );
+
+  return {
+    actualizado:true,
+    texto:'✅ La reunión "'+String(reunion.TITULO||'')+
+      '" quedó como '+estado.toLowerCase()+'.'
+  };
+}
+
+function botEliminarReunionTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['idReunion']);
+
+  const hoja=obtenerHoja('REUNIONES');
+  const reunion=obtenerRegistrosConFila('REUNIONES').find(r=>
+    String(r.ID_REUNION||'').trim()===String(datos.idReunion||'').trim()&&
+    String(r.ID_MAESTRA||'').trim()===enlace.idMaestra
+  );
+
+  if(!reunion)throw new Error('No se encontró la reunión.');
+
+  const titulo=String(reunion.TITULO||'');
+  hoja.deleteRow(reunion.__fila);
+
+  registrarAuditoria(
+    enlace.idMaestra,
+    'ELIMINAR',
+    'REUNIONES',
+    'Reunión eliminada desde Telegram: '+titulo
+  );
+
+  return {
+    eliminado:true,
+    texto:'🗑️ Reunión eliminada correctamente: '+titulo
+  };
+}
+
+
+function botListarPlanesGestionTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+
+  const planes=obtenerRegistrosConFila('PLANIFICACION')
+    .filter(r=>
+      String(r.ID_MAESTRA||'').trim()===enlace.idMaestra
+    )
+    .map(r=>({
+      idPlanificacion:String(r.ID_PLANIFICACION||''),
+      titulo:String(r.TITULO||''),
+      asignatura:String(r.ASIGNATURA||''),
+      grado:String(r.GRADO||''),
+      fecha:normalizarFechaTextoTelegram(r.FECHA),
+      objetivo:String(r.OBJETIVO||''),
+      contenido:String(r.CONTENIDO||''),
+      actividades:String(r.ACTIVIDADES||''),
+      recursos:String(r.RECURSOS||''),
+      evaluacion:String(r.EVALUACION||''),
+      estado:String(r.ESTADO||'PLANIFICADA').toUpperCase()
+    }))
+    .sort((a,b)=>b.fecha.localeCompare(a.fecha))
+    .slice(0,20);
+
+  return {planes:planes};
+}
+
+function botObtenerPlanGestionTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['idPlanificacion']);
+
+  const plan=obtenerRegistrosConFila('PLANIFICACION').find(r=>
+    String(r.ID_PLANIFICACION||'').trim()===
+      String(datos.idPlanificacion||'').trim()&&
+    String(r.ID_MAESTRA||'').trim()===enlace.idMaestra
+  );
+
+  if(!plan)throw new Error('No se encontró la planificación.');
+
+  const resultado={
+    idPlanificacion:String(plan.ID_PLANIFICACION||''),
+    titulo:String(plan.TITULO||''),
+    asignatura:String(plan.ASIGNATURA||''),
+    grado:String(plan.GRADO||''),
+    fecha:normalizarFechaTextoTelegram(plan.FECHA),
+    objetivo:String(plan.OBJETIVO||''),
+    contenido:String(plan.CONTENIDO||''),
+    actividades:String(plan.ACTIVIDADES||''),
+    recursos:String(plan.RECURSOS||''),
+    evaluacion:String(plan.EVALUACION||''),
+    estado:String(plan.ESTADO||'PLANIFICADA').toUpperCase()
+  };
+
+  return {
+    plan:resultado,
+    texto:[
+      '📚 Planificación',
+      '',
+      'Título: '+resultado.titulo,
+      'Asignatura: '+resultado.asignatura,
+      'Grado: '+(resultado.grado||'Sin indicar'),
+      'Fecha: '+formatearFechaTelegram(resultado.fecha),
+      'Estado: '+capitalizarTelegram(resultado.estado),
+      'Objetivo: '+(resultado.objetivo||'Sin objetivo'),
+      'Contenido: '+(resultado.contenido||'Sin contenido'),
+      'Actividades: '+(resultado.actividades||'Sin actividades'),
+      'Recursos: '+(resultado.recursos||'Sin recursos'),
+      'Evaluación: '+(resultado.evaluacion||'Sin evaluación')
+    ].join('\n')
+  };
+}
+
+function botCambiarEstadoPlanTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['idPlanificacion','estado']);
+
+  const estado=String(datos.estado||'').trim().toUpperCase();
+  const permitidos=['BORRADOR','PLANIFICADA','COMPLETADA'];
+
+  if(!permitidos.includes(estado)){
+    throw new Error('El estado de la planificación no es válido.');
+  }
+
+  const hoja=obtenerHoja('PLANIFICACION');
+  const plan=obtenerRegistrosConFila('PLANIFICACION').find(r=>
+    String(r.ID_PLANIFICACION||'').trim()===
+      String(datos.idPlanificacion||'').trim()&&
+    String(r.ID_MAESTRA||'').trim()===enlace.idMaestra
+  );
+
+  if(!plan)throw new Error('No se encontró la planificación.');
+
+  // La columna 12 corresponde a ESTADO.
+  hoja.getRange(plan.__fila,12).setValue(estado);
+
+  registrarAuditoria(
+    enlace.idMaestra,
+    'EDITAR',
+    'PLANIFICACION',
+    'Planificación '+String(plan.TITULO||'')+
+      ' cambiada a '+estado+' desde Telegram'
+  );
+
+  return {
+    actualizado:true,
+    texto:'✅ La planificación "'+String(plan.TITULO||'')+
+      '" quedó como '+estado.toLowerCase()+'.'
+  };
+}
+
+function botEliminarPlanTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['idPlanificacion']);
+
+  const hoja=obtenerHoja('PLANIFICACION');
+  const plan=obtenerRegistrosConFila('PLANIFICACION').find(r=>
+    String(r.ID_PLANIFICACION||'').trim()===
+      String(datos.idPlanificacion||'').trim()&&
+    String(r.ID_MAESTRA||'').trim()===enlace.idMaestra
+  );
+
+  if(!plan)throw new Error('No se encontró la planificación.');
+
+  const titulo=String(plan.TITULO||'');
+  hoja.deleteRow(plan.__fila);
+
+  registrarAuditoria(
+    enlace.idMaestra,
+    'ELIMINAR',
+    'PLANIFICACION',
+    'Planificación eliminada desde Telegram: '+titulo
+  );
+
+  return {
+    eliminado:true,
+    texto:'🗑️ Planificación eliminada correctamente: '+titulo
+  };
+}
+
+
+function claveEdicionCalificacionTelegram(chatId){
+  return 'TELEGRAM_CALIFICACION_EDICION_'+String(chatId).trim();
+}
+
+function guardarEdicionCalificacionTelegram(chatId,flujo){
+  const contenido=Object.assign({},flujo,{actualizado:Date.now()});
+  PropertiesService.getScriptProperties().setProperty(
+    claveEdicionCalificacionTelegram(chatId),
+    JSON.stringify(contenido)
+  );
+  return contenido;
+}
+
+function obtenerEdicionCalificacionTelegram(chatId){
+  const clave=claveEdicionCalificacionTelegram(chatId);
+  const valor=PropertiesService.getScriptProperties().getProperty(clave);
+
+  if(!valor)return null;
+
+  try{
+    const flujo=JSON.parse(valor);
+
+    if(Date.now()-Number(flujo.actualizado||0)>60*60*1000){
+      PropertiesService.getScriptProperties().deleteProperty(clave);
+      return null;
+    }
+
+    return flujo;
+  }catch(_){
+    PropertiesService.getScriptProperties().deleteProperty(clave);
+    return null;
+  }
+}
+
+function borrarEdicionCalificacionTelegram(chatId){
+  PropertiesService.getScriptProperties().deleteProperty(
+    claveEdicionCalificacionTelegram(chatId)
+  );
+}
+
+function nombreAlumnoCalificacionTelegram(idAlumno,alumnos){
+  const alumno=alumnos.find(r=>
+    String(r.ID_ALUMNO||'').trim()===String(idAlumno||'').trim()
+  );
+
+  if(!alumno)return 'Alumno';
+
+  return (
+    String(alumno.NOMBRE||'')+' '+String(alumno.APELLIDO||'')
+  ).trim();
+}
+
+function botListarCalificacionesGestionTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+
+  const alumnos=obtenerRegistros('ALUMNOS').filter(r=>
+    String(r.ID_MAESTRA||'').trim()===enlace.idMaestra
+  );
+
+  const calificaciones=obtenerRegistrosConFila('CALIFICACIONES')
+    .filter(r=>
+      String(r.ID_MAESTRA||'').trim()===enlace.idMaestra
+    )
+    .map(r=>({
+      idCalificacion:String(r.ID_CALIFICACION||''),
+      idAlumno:String(r.ID_ALUMNO||''),
+      nombreAlumno:nombreAlumnoCalificacionTelegram(r.ID_ALUMNO,alumnos),
+      asignatura:String(r.ASIGNATURA||''),
+      actividad:String(r.ACTIVIDAD||''),
+      periodo:String(r.PERIODO||''),
+      calificacion:Number(r.CALIFICACION||0),
+      calificacionMaxima:Number(r.CALIFICACION_MAXIMA||0),
+      fecha:normalizarFechaTextoTelegram(r.FECHA),
+      observaciones:String(r.OBSERVACIONES||'')
+    }))
+    .sort((a,b)=>b.fecha.localeCompare(a.fecha))
+    .slice(0,20);
+
+  return {calificaciones:calificaciones};
+}
+
+function botObtenerCalificacionGestionTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['idCalificacion']);
+
+  const alumnos=obtenerRegistros('ALUMNOS').filter(r=>
+    String(r.ID_MAESTRA||'').trim()===enlace.idMaestra
+  );
+
+  const registro=obtenerRegistrosConFila('CALIFICACIONES').find(r=>
+    String(r.ID_CALIFICACION||'').trim()===
+      String(datos.idCalificacion||'').trim()&&
+    String(r.ID_MAESTRA||'').trim()===enlace.idMaestra
+  );
+
+  if(!registro)throw new Error('No se encontró la calificación.');
+
+  const resultado={
+    idCalificacion:String(registro.ID_CALIFICACION||''),
+    idAlumno:String(registro.ID_ALUMNO||''),
+    nombreAlumno:nombreAlumnoCalificacionTelegram(
+      registro.ID_ALUMNO,
+      alumnos
+    ),
+    asignatura:String(registro.ASIGNATURA||''),
+    actividad:String(registro.ACTIVIDAD||''),
+    periodo:String(registro.PERIODO||''),
+    calificacion:Number(registro.CALIFICACION||0),
+    calificacionMaxima:Number(registro.CALIFICACION_MAXIMA||0),
+    fecha:normalizarFechaTextoTelegram(registro.FECHA),
+    observaciones:String(registro.OBSERVACIONES||'')
+  };
+
+  const porcentaje=resultado.calificacionMaxima>0
+    ?Math.round(
+      resultado.calificacion/resultado.calificacionMaxima*100
+    )
+    :0;
+
+  return {
+    calificacion:resultado,
+    texto:[
+      '📝 Calificación',
+      '',
+      'Alumno: '+resultado.nombreAlumno,
+      'Asignatura: '+resultado.asignatura,
+      'Actividad: '+resultado.actividad,
+      'Período: '+resultado.periodo,
+      'Nota: '+resultado.calificacion+'/'+resultado.calificacionMaxima+
+        ' ('+porcentaje+'%)',
+      'Fecha: '+formatearFechaTelegram(resultado.fecha),
+      'Observaciones: '+(
+        resultado.observaciones||'Sin observaciones'
+      )
+    ].join('\n')
+  };
+}
+
+function botIniciarEdicionCalificacionTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['idCalificacion']);
+
+  const registro=obtenerRegistrosConFila('CALIFICACIONES').find(r=>
+    String(r.ID_CALIFICACION||'').trim()===
+      String(datos.idCalificacion||'').trim()&&
+    String(r.ID_MAESTRA||'').trim()===enlace.idMaestra
+  );
+
+  if(!registro)throw new Error('No se encontró la calificación.');
+
+  guardarEdicionCalificacionTelegram(enlace.chatId,{
+    idMaestra:enlace.idMaestra,
+    idCalificacion:String(registro.ID_CALIFICACION||''),
+    paso:'CALIFICACION',
+    datos:{
+      calificacion:Number(registro.CALIFICACION||0),
+      calificacionMaxima:Number(registro.CALIFICACION_MAXIMA||0),
+      observaciones:String(registro.OBSERVACIONES||'')
+    }
+  });
+
+  return {
+    activo:true,
+    paso:'CALIFICACION',
+    texto:[
+      '✏️ Corregir calificación',
+      '',
+      'Nota actual: '+Number(registro.CALIFICACION||0),
+      '',
+      'Escribe la nueva calificación.'
+    ].join('\n')
+  };
+}
+
+function botProcesarEdicionCalificacionTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['texto']);
+
+  const texto=String(datos.texto||'').trim();
+  const flujo=obtenerEdicionCalificacionTelegram(enlace.chatId);
+
+  if(!flujo)return {activo:false};
+
+  if(texto.toLowerCase()==='/cancelar'){
+    borrarEdicionCalificacionTelegram(enlace.chatId);
+
+    return {
+      activo:false,
+      cancelado:true,
+      texto:'❌ Corrección de calificación cancelada.'
+    };
+  }
+
+  flujo.datos=flujo.datos||{};
+
+  if(flujo.paso==='CALIFICACION'){
+    const nota=normalizarNumeroCalificacionTelegram(
+      texto,
+      'La calificación'
+    );
+
+    if(nota<0)throw new Error('La calificación no puede ser negativa.');
+
+    flujo.datos.calificacion=nota;
+    flujo.paso='MAXIMA';
+    guardarEdicionCalificacionTelegram(enlace.chatId,flujo);
+
+    return {
+      activo:true,
+      paso:'MAXIMA',
+      texto:[
+        'Calificación máxima actual: '+
+          Number(flujo.datos.calificacionMaxima||0),
+        '',
+        'Escribe la nueva calificación máxima.',
+        'Escribe un guion - para conservarla.'
+      ].join('\n')
+    };
+  }
+
+  if(flujo.paso==='MAXIMA'){
+    if(texto!=='-'){
+      const maxima=normalizarNumeroCalificacionTelegram(
+        texto,
+        'La calificación máxima'
+      );
+
+      if(maxima<=0){
+        throw new Error(
+          'La calificación máxima debe ser mayor que cero.'
+        );
+      }
+
+      flujo.datos.calificacionMaxima=maxima;
+    }
+
+    if(
+      Number(flujo.datos.calificacion)>
+      Number(flujo.datos.calificacionMaxima)
+    ){
+      throw new Error(
+        'La calificación no puede superar la máxima.'
+      );
+    }
+
+    flujo.paso='OBSERVACIONES';
+    guardarEdicionCalificacionTelegram(enlace.chatId,flujo);
+
+    return {
+      activo:true,
+      paso:'OBSERVACIONES',
+      texto:[
+        'Observaciones actuales: '+
+          (String(flujo.datos.observaciones||'').trim()||
+            'Sin observaciones'),
+        '',
+        'Escribe las nuevas observaciones.',
+        'Escribe un guion - para conservarlas.'
+      ].join('\n')
+    };
+  }
+
+  if(flujo.paso==='OBSERVACIONES'){
+    if(texto!=='-')flujo.datos.observaciones=texto;
+
+    flujo.paso='CONFIRMAR';
+    guardarEdicionCalificacionTelegram(enlace.chatId,flujo);
+
+    const nota=Number(flujo.datos.calificacion||0);
+    const maxima=Number(flujo.datos.calificacionMaxima||0);
+    const porcentaje=maxima>0?Math.round(nota/maxima*100):0;
+
+    return {
+      activo:true,
+      paso:'CONFIRMAR',
+      texto:[
+        '📝 Revisa la corrección',
+        '',
+        'Nueva nota: '+nota+'/'+maxima+' ('+porcentaje+'%)',
+        'Observaciones: '+(
+          String(flujo.datos.observaciones||'').trim()||
+          'Sin observaciones'
+        )
+      ].join('\n')
+    };
+  }
+
+  return {
+    activo:true,
+    paso:String(flujo.paso||''),
+    texto:'Continúa con los botones mostrados o escribe /cancelar.'
+  };
+}
+
+function botConfirmarEdicionCalificacionTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  const flujo=obtenerEdicionCalificacionTelegram(enlace.chatId);
+
+  if(!flujo||flujo.paso!=='CONFIRMAR'){
+    throw new Error(
+      'No hay una corrección pendiente de confirmación.'
+    );
+  }
+
+  const registro=obtenerRegistrosConFila('CALIFICACIONES').find(r=>
+    String(r.ID_CALIFICACION||'').trim()===
+      String(flujo.idCalificacion||'').trim()&&
+    String(r.ID_MAESTRA||'').trim()===enlace.idMaestra
+  );
+
+  if(!registro)throw new Error('La calificación ya no está disponible.');
+
+  const nota=Number(flujo.datos.calificacion);
+  const maxima=Number(flujo.datos.calificacionMaxima);
+
+  if(!Number.isFinite(nota)||nota<0){
+    throw new Error('La calificación no es válida.');
+  }
+
+  if(!Number.isFinite(maxima)||maxima<=0){
+    throw new Error('La calificación máxima no es válida.');
+  }
+
+  if(nota>maxima){
+    throw new Error('La calificación no puede superar la máxima.');
+  }
+
+  const hoja=obtenerHoja('CALIFICACIONES');
+
+  hoja.getRange(registro.__fila,7,1,2).setValues([[
+    nota,
+    maxima
+  ]]);
+
+  hoja.getRange(registro.__fila,10).setValue(
+    String(flujo.datos.observaciones||'')
+  );
+
+  registrarAuditoria(
+    enlace.idMaestra,
+    'EDITAR',
+    'CALIFICACIONES',
+    'Calificación corregida desde Telegram: '+
+      String(registro.ACTIVIDAD||'Actividad')
+  );
+
+  borrarEdicionCalificacionTelegram(enlace.chatId);
+
+  return {
+    activo:false,
+    guardado:true,
+    texto:'✅ Calificación corregida correctamente: '+
+      nota+'/'+maxima
+  };
+}
+
+function botCancelarEdicionCalificacionTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  borrarEdicionCalificacionTelegram(enlace.chatId);
+
+  return {
+    activo:false,
+    cancelado:true,
+    texto:'❌ Corrección de calificación cancelada.'
+  };
+}
+
+function botEliminarCalificacionTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['idCalificacion']);
+
+  const registro=obtenerRegistrosConFila('CALIFICACIONES').find(r=>
+    String(r.ID_CALIFICACION||'').trim()===
+      String(datos.idCalificacion||'').trim()&&
+    String(r.ID_MAESTRA||'').trim()===enlace.idMaestra
+  );
+
+  if(!registro)throw new Error('No se encontró la calificación.');
+
+  const hoja=obtenerHoja('CALIFICACIONES');
+  const actividad=String(registro.ACTIVIDAD||'');
+  hoja.deleteRow(registro.__fila);
+
+  registrarAuditoria(
+    enlace.idMaestra,
+    'ELIMINAR',
+    'CALIFICACIONES',
+    'Calificación eliminada desde Telegram: '+actividad
+  );
+
+  return {
+    eliminado:true,
+    texto:'🗑️ Calificación eliminada correctamente: '+actividad
+  };
+}
+
+
+function claveEdicionAlumnoTelegram(chatId){
+  return 'TELEGRAM_ALUMNO_EDICION_'+String(chatId).trim();
+}
+
+function guardarEdicionAlumnoTelegram(chatId,flujo){
+  const contenido=Object.assign({},flujo,{actualizado:Date.now()});
+  PropertiesService.getScriptProperties().setProperty(
+    claveEdicionAlumnoTelegram(chatId),
+    JSON.stringify(contenido)
+  );
+  return contenido;
+}
+
+function obtenerEdicionAlumnoTelegram(chatId){
+  const clave=claveEdicionAlumnoTelegram(chatId);
+  const valor=PropertiesService.getScriptProperties().getProperty(clave);
+
+  if(!valor)return null;
+
+  try{
+    const flujo=JSON.parse(valor);
+
+    if(Date.now()-Number(flujo.actualizado||0)>60*60*1000){
+      PropertiesService.getScriptProperties().deleteProperty(clave);
+      return null;
+    }
+
+    return flujo;
+  }catch(_){
+    PropertiesService.getScriptProperties().deleteProperty(clave);
+    return null;
+  }
+}
+
+function borrarEdicionAlumnoTelegram(chatId){
+  PropertiesService.getScriptProperties().deleteProperty(
+    claveEdicionAlumnoTelegram(chatId)
+  );
+}
+
+function botListarAlumnosGestionTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+
+  const alumnos=obtenerRegistrosConFila('ALUMNOS')
+    .filter(r=>
+      String(r.ID_MAESTRA||'').trim()===enlace.idMaestra&&
+      String(r.ESTADO||'').trim().toUpperCase()!=='ELIMINADO'
+    )
+    .map(r=>({
+      idAlumno:String(r.ID_ALUMNO||''),
+      nombre:(String(r.NOMBRE||'')+' '+String(r.APELLIDO||'')).trim(),
+      grado:String(r.GRADO||''),
+      seccion:String(r.SECCION||''),
+      estado:String(r.ESTADO||'ACTIVO').toUpperCase()
+    }))
+    .sort((a,b)=>a.nombre.localeCompare(b.nombre))
+    .slice(0,30);
+
+  return {alumnos:alumnos};
+}
+
+function botObtenerAlumnoGestionTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['idAlumno']);
+
+  const alumno=obtenerRegistrosConFila('ALUMNOS').find(r=>
+    String(r.ID_ALUMNO||'').trim()===String(datos.idAlumno||'').trim()&&
+    String(r.ID_MAESTRA||'').trim()===enlace.idMaestra&&
+    String(r.ESTADO||'').trim().toUpperCase()!=='ELIMINADO'
+  );
+
+  if(!alumno)throw new Error('No se encontró el alumno.');
+
+  const resultado={
+    idAlumno:String(alumno.ID_ALUMNO||''),
+    nombre:String(alumno.NOMBRE||''),
+    apellido:String(alumno.APELLIDO||''),
+    documento:String(alumno.DOCUMENTO||''),
+    fechaNacimiento:formatearFechaParaFormulario(alumno.FECHA_NACIMIENTO),
+    sexo:String(alumno.SEXO||''),
+    grado:String(alumno.GRADO||''),
+    seccion:String(alumno.SECCION||''),
+    representante:String(alumno.REPRESENTANTE||''),
+    telefono:String(alumno.TELEFONO||''),
+    direccion:String(alumno.DIRECCION||''),
+    observaciones:String(alumno.OBSERVACIONES||''),
+    estado:String(alumno.ESTADO||'ACTIVO').toUpperCase()
+  };
+
+  return {
+    alumno:resultado,
+    texto:[
+      '👩‍🎓 Alumno',
+      '',
+      'Nombre: '+resultado.nombre+' '+resultado.apellido,
+      'Documento: '+(resultado.documento||'Sin documento'),
+      'Nacimiento: '+(
+        resultado.fechaNacimiento
+          ?formatearFechaTelegram(resultado.fechaNacimiento)
+          :'Sin fecha'
+      ),
+      'Sexo: '+(resultado.sexo||'Sin indicar'),
+      'Grado: '+(resultado.grado||'Sin indicar'),
+      'Sección: '+(resultado.seccion||'Sin indicar'),
+      'Representante: '+(resultado.representante||'Sin indicar'),
+      'Teléfono: '+(resultado.telefono||'Sin indicar'),
+      'Estado: '+capitalizarTelegram(resultado.estado),
+      'Observaciones: '+(resultado.observaciones||'Sin observaciones')
+    ].join('\n')
+  };
+}
+
+function botIniciarEdicionAlumnoTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['idAlumno']);
+
+  const alumno=obtenerRegistrosConFila('ALUMNOS').find(r=>
+    String(r.ID_ALUMNO||'').trim()===String(datos.idAlumno||'').trim()&&
+    String(r.ID_MAESTRA||'').trim()===enlace.idMaestra&&
+    String(r.ESTADO||'').trim().toUpperCase()!=='ELIMINADO'
+  );
+
+  if(!alumno)throw new Error('No se encontró el alumno.');
+
+  guardarEdicionAlumnoTelegram(enlace.chatId,{
+    idMaestra:enlace.idMaestra,
+    idAlumno:String(alumno.ID_ALUMNO||''),
+    paso:'NOMBRE',
+    datos:{
+      nombre:String(alumno.NOMBRE||''),
+      apellido:String(alumno.APELLIDO||''),
+      grado:String(alumno.GRADO||''),
+      seccion:String(alumno.SECCION||''),
+      representante:String(alumno.REPRESENTANTE||''),
+      telefono:String(alumno.TELEFONO||''),
+      observaciones:String(alumno.OBSERVACIONES||'')
+    }
+  });
+
+  return {
+    activo:true,
+    paso:'NOMBRE',
+    texto:[
+      '✏️ Editar alumno',
+      '',
+      'Nombre actual: '+String(alumno.NOMBRE||''),
+      '',
+      'Escribe el nuevo nombre.',
+      'Escribe un guion - para conservarlo.'
+    ].join('\n')
+  };
+}
+
+function botProcesarEdicionAlumnoTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['texto']);
+
+  const texto=String(datos.texto||'').trim();
+  const flujo=obtenerEdicionAlumnoTelegram(enlace.chatId);
+
+  if(!flujo)return {activo:false};
+
+  if(texto.toLowerCase()==='/cancelar'){
+    borrarEdicionAlumnoTelegram(enlace.chatId);
+
+    return {
+      activo:false,
+      cancelado:true,
+      texto:'❌ Edición del alumno cancelada.'
+    };
+  }
+
+  flujo.datos=flujo.datos||{};
+
+  if(flujo.paso==='NOMBRE'){
+    if(texto!=='-'){
+      if(texto.length<2)throw new Error('El nombre debe tener al menos 2 caracteres.');
+      flujo.datos.nombre=texto;
+    }
+
+    flujo.paso='APELLIDO';
+    guardarEdicionAlumnoTelegram(enlace.chatId,flujo);
+
+    return {
+      activo:true,
+      paso:'APELLIDO',
+      texto:'Escribe el nuevo apellido.\n\nEscribe un guion - para conservarlo.'
+    };
+  }
+
+  if(flujo.paso==='APELLIDO'){
+    if(texto!=='-'){
+      if(texto.length<2)throw new Error('El apellido debe tener al menos 2 caracteres.');
+      flujo.datos.apellido=texto;
+    }
+
+    flujo.paso='GRADO';
+    guardarEdicionAlumnoTelegram(enlace.chatId,flujo);
+
+    return {
+      activo:true,
+      paso:'GRADO',
+      texto:'Escribe el nuevo grado.\n\nEscribe un guion - para conservarlo.'
+    };
+  }
+
+  if(flujo.paso==='GRADO'){
+    if(texto!=='-')flujo.datos.grado=texto;
+
+    flujo.paso='SECCION';
+    guardarEdicionAlumnoTelegram(enlace.chatId,flujo);
+
+    return {
+      activo:true,
+      paso:'SECCION',
+      texto:'Escribe la nueva sección.\n\nEscribe un guion - para conservarla.'
+    };
+  }
+
+  if(flujo.paso==='SECCION'){
+    if(texto!=='-')flujo.datos.seccion=texto;
+
+    flujo.paso='REPRESENTANTE';
+    guardarEdicionAlumnoTelegram(enlace.chatId,flujo);
+
+    return {
+      activo:true,
+      paso:'REPRESENTANTE',
+      texto:'Escribe el representante.\n\nEscribe un guion - para conservarlo.'
+    };
+  }
+
+  if(flujo.paso==='REPRESENTANTE'){
+    if(texto!=='-')flujo.datos.representante=texto;
+
+    flujo.paso='TELEFONO';
+    guardarEdicionAlumnoTelegram(enlace.chatId,flujo);
+
+    return {
+      activo:true,
+      paso:'TELEFONO',
+      texto:'Escribe el teléfono.\n\nEscribe un guion - para conservarlo.'
+    };
+  }
+
+  if(flujo.paso==='TELEFONO'){
+    if(texto!=='-')flujo.datos.telefono=texto;
+
+    flujo.paso='OBSERVACIONES';
+    guardarEdicionAlumnoTelegram(enlace.chatId,flujo);
+
+    return {
+      activo:true,
+      paso:'OBSERVACIONES',
+      texto:'Escribe las observaciones.\n\nEscribe un guion - para conservarlas.'
+    };
+  }
+
+  if(flujo.paso==='OBSERVACIONES'){
+    if(texto!=='-')flujo.datos.observaciones=texto;
+
+    flujo.paso='CONFIRMAR';
+    guardarEdicionAlumnoTelegram(enlace.chatId,flujo);
+
+    return {
+      activo:true,
+      paso:'CONFIRMAR',
+      texto:[
+        '👩‍🎓 Revisa los cambios',
+        '',
+        'Nombre: '+String(flujo.datos.nombre||'')+' '+
+          String(flujo.datos.apellido||''),
+        'Grado: '+(String(flujo.datos.grado||'').trim()||'Sin indicar'),
+        'Sección: '+(String(flujo.datos.seccion||'').trim()||'Sin indicar'),
+        'Representante: '+(
+          String(flujo.datos.representante||'').trim()||'Sin indicar'
+        ),
+        'Teléfono: '+(
+          String(flujo.datos.telefono||'').trim()||'Sin indicar'
+        ),
+        'Observaciones: '+(
+          String(flujo.datos.observaciones||'').trim()||'Sin observaciones'
+        )
+      ].join('\n')
+    };
+  }
+
+  return {
+    activo:true,
+    paso:String(flujo.paso||''),
+    texto:'Continúa con los botones mostrados o escribe /cancelar.'
+  };
+}
+
+function botConfirmarEdicionAlumnoTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  const flujo=obtenerEdicionAlumnoTelegram(enlace.chatId);
+
+  if(!flujo||flujo.paso!=='CONFIRMAR'){
+    throw new Error('No hay una edición pendiente de confirmación.');
+  }
+
+  const alumno=obtenerRegistrosConFila('ALUMNOS').find(r=>
+    String(r.ID_ALUMNO||'').trim()===String(flujo.idAlumno||'').trim()&&
+    String(r.ID_MAESTRA||'').trim()===enlace.idMaestra&&
+    String(r.ESTADO||'').trim().toUpperCase()!=='ELIMINADO'
+  );
+
+  if(!alumno)throw new Error('El alumno ya no está disponible.');
+
+  const d=flujo.datos||{};
+  if(!d.nombre||!d.apellido){
+    throw new Error('Faltan el nombre o el apellido.');
+  }
+
+  const hoja=obtenerHoja('ALUMNOS');
+
+  hoja.getRange(alumno.__fila,3,1,2).setValues([[
+    limpiarTexto(d.nombre),
+    limpiarTexto(d.apellido)
+  ]]);
+
+  hoja.getRange(alumno.__fila,8,1,5).setValues([[
+    limpiarTexto(d.grado||''),
+    limpiarTexto(d.seccion||''),
+    limpiarTexto(d.representante||''),
+    limpiarTexto(d.telefono||''),
+    limpiarTexto(alumno.DIRECCION||'')
+  ]]);
+
+  hoja.getRange(alumno.__fila,13).setValue(
+    limpiarTexto(d.observaciones||'')
+  );
+
+  registrarAuditoria(
+    enlace.idMaestra,
+    'EDITAR',
+    'ALUMNOS',
+    'Alumno actualizado desde Telegram: '+
+      limpiarTexto(d.nombre)+' '+limpiarTexto(d.apellido)
+  );
+
+  borrarEdicionAlumnoTelegram(enlace.chatId);
+
+  return {
+    activo:false,
+    guardado:true,
+    texto:'✅ Alumno actualizado correctamente: '+
+      limpiarTexto(d.nombre)+' '+limpiarTexto(d.apellido)
+  };
+}
+
+function botCambiarEstadoAlumnoTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['idAlumno','estado']);
+
+  const estado=String(datos.estado||'').trim().toUpperCase();
+  if(!['ACTIVO','INACTIVO'].includes(estado)){
+    throw new Error('El estado del alumno no es válido.');
+  }
+
+  const alumno=obtenerRegistrosConFila('ALUMNOS').find(r=>
+    String(r.ID_ALUMNO||'').trim()===String(datos.idAlumno||'').trim()&&
+    String(r.ID_MAESTRA||'').trim()===enlace.idMaestra&&
+    String(r.ESTADO||'').trim().toUpperCase()!=='ELIMINADO'
+  );
+
+  if(!alumno)throw new Error('No se encontró el alumno.');
+
+  const hoja=obtenerHoja('ALUMNOS');
+  hoja.getRange(alumno.__fila,14).setValue(estado);
+
+  registrarAuditoria(
+    enlace.idMaestra,
+    'EDITAR',
+    'ALUMNOS',
+    'Alumno '+String(alumno.NOMBRE||'')+' cambiado a '+estado+
+      ' desde Telegram'
+  );
+
+  return {
+    actualizado:true,
+    texto:'✅ El alumno quedó como '+estado.toLowerCase()+'.'
+  };
+}
+
+function botEliminarAlumnoTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['idAlumno']);
+
+  const alumno=obtenerRegistrosConFila('ALUMNOS').find(r=>
+    String(r.ID_ALUMNO||'').trim()===String(datos.idAlumno||'').trim()&&
+    String(r.ID_MAESTRA||'').trim()===enlace.idMaestra&&
+    String(r.ESTADO||'').trim().toUpperCase()!=='ELIMINADO'
+  );
+
+  if(!alumno)throw new Error('No se encontró el alumno.');
+
+  const hoja=obtenerHoja('ALUMNOS');
+  hoja.getRange(alumno.__fila,14).setValue('ELIMINADO');
+
+  const nombre=(
+    String(alumno.NOMBRE||'')+' '+String(alumno.APELLIDO||'')
+  ).trim();
+
+  registrarAuditoria(
+    enlace.idMaestra,
+    'ELIMINAR',
+    'ALUMNOS',
+    'Alumno eliminado desde Telegram: '+nombre
+  );
+
+  return {
+    eliminado:true,
+    texto:'🗑️ Alumno eliminado correctamente: '+nombre
+  };
+}
+
+
+function nombreAlumnoAsistenciaTelegram(idAlumno,alumnos){
+  const alumno=alumnos.find(r=>
+    String(r.ID_ALUMNO||'').trim()===String(idAlumno||'').trim()
+  );
+
+  if(!alumno)return 'Alumno';
+
+  return (
+    String(alumno.NOMBRE||'')+' '+String(alumno.APELLIDO||'')
+  ).trim();
+}
+
+function botListarAsistenciaGestionTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  const fecha=Utilities.formatDate(
+    new Date(),
+    obtenerZonaHorariaAulaMagica(),
+    'yyyy-MM-dd'
+  );
+
+  const alumnos=obtenerRegistros('ALUMNOS').filter(r=>
+    String(r.ID_MAESTRA||'').trim()===enlace.idMaestra
+  );
+
+  const asistencias=obtenerRegistrosConFila('ASISTENCIA')
+    .filter(r=>
+      String(r.ID_MAESTRA||'').trim()===enlace.idMaestra&&
+      normalizarFechaAsistencia(r.FECHA)===fecha
+    )
+    .map(r=>({
+      idAsistencia:String(r.ID_ASISTENCIA||''),
+      idAlumno:String(r.ID_ALUMNO||''),
+      nombreAlumno:nombreAlumnoAsistenciaTelegram(r.ID_ALUMNO,alumnos),
+      fecha:normalizarFechaAsistencia(r.FECHA),
+      estado:String(r.ESTADO||'PRESENTE').toUpperCase(),
+      observaciones:String(r.OBSERVACIONES||'')
+    }))
+    .sort((a,b)=>a.nombreAlumno.localeCompare(b.nombreAlumno));
+
+  return {
+    fecha:fecha,
+    asistencias:asistencias
+  };
+}
+
+function botObtenerAsistenciaGestionTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['idAsistencia']);
+
+  const alumnos=obtenerRegistros('ALUMNOS').filter(r=>
+    String(r.ID_MAESTRA||'').trim()===enlace.idMaestra
+  );
+
+  const registro=obtenerRegistrosConFila('ASISTENCIA').find(r=>
+    String(r.ID_ASISTENCIA||'').trim()===
+      String(datos.idAsistencia||'').trim()&&
+    String(r.ID_MAESTRA||'').trim()===enlace.idMaestra
+  );
+
+  if(!registro)throw new Error('No se encontró el registro de asistencia.');
+
+  const asistencia={
+    idAsistencia:String(registro.ID_ASISTENCIA||''),
+    idAlumno:String(registro.ID_ALUMNO||''),
+    nombreAlumno:nombreAlumnoAsistenciaTelegram(
+      registro.ID_ALUMNO,
+      alumnos
+    ),
+    fecha:normalizarFechaAsistencia(registro.FECHA),
+    estado:String(registro.ESTADO||'PRESENTE').toUpperCase(),
+    observaciones:String(registro.OBSERVACIONES||'')
+  };
+
+  return {
+    asistencia:asistencia,
+    texto:[
+      '✅ Asistencia',
+      '',
+      'Alumno: '+asistencia.nombreAlumno,
+      'Fecha: '+formatearFechaTelegram(asistencia.fecha),
+      'Estado: '+capitalizarTelegram(asistencia.estado),
+      'Observaciones: '+(
+        asistencia.observaciones||'Sin observaciones'
+      )
+    ].join('\n')
+  };
+}
+
+function botCambiarEstadoAsistenciaTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['idAsistencia','estado']);
+
+  const estado=String(datos.estado||'').trim().toUpperCase();
+  const permitidos=['PRESENTE','AUSENTE','TARDE','JUSTIFICADO'];
+
+  if(!permitidos.includes(estado)){
+    throw new Error('El estado de asistencia no es válido.');
+  }
+
+  const registro=obtenerRegistrosConFila('ASISTENCIA').find(r=>
+    String(r.ID_ASISTENCIA||'').trim()===
+      String(datos.idAsistencia||'').trim()&&
+    String(r.ID_MAESTRA||'').trim()===enlace.idMaestra
+  );
+
+  if(!registro)throw new Error('No se encontró el registro de asistencia.');
+
+  const hoja=obtenerHoja('ASISTENCIA');
+  hoja.getRange(registro.__fila,5).setValue(estado);
+
+  registrarAuditoria(
+    enlace.idMaestra,
+    'EDITAR',
+    'ASISTENCIA',
+    'Asistencia cambiada a '+estado+' desde Telegram'
+  );
+
+  return {
+    actualizado:true,
+    texto:'✅ La asistencia quedó como '+estado.toLowerCase()+'.'
+  };
+}
+
+function botEliminarAsistenciaTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['idAsistencia']);
+
+  const registro=obtenerRegistrosConFila('ASISTENCIA').find(r=>
+    String(r.ID_ASISTENCIA||'').trim()===
+      String(datos.idAsistencia||'').trim()&&
+    String(r.ID_MAESTRA||'').trim()===enlace.idMaestra
+  );
+
+  if(!registro)throw new Error('No se encontró el registro de asistencia.');
+
+  obtenerHoja('ASISTENCIA').deleteRow(registro.__fila);
+
+  registrarAuditoria(
+    enlace.idMaestra,
+    'ELIMINAR',
+    'ASISTENCIA',
+    'Registro de asistencia eliminado desde Telegram'
+  );
+
+  return {
+    eliminado:true,
+    texto:'🗑️ Registro de asistencia eliminado correctamente.'
+  };
+}
+
+
+function claveEdicionEventoTelegram(chatId){
+  return 'TELEGRAM_EVENTO_EDICION_'+String(chatId).trim();
+}
+
+function guardarEdicionEventoTelegram(chatId,flujo){
+  const contenido=Object.assign({},flujo,{actualizado:Date.now()});
+  PropertiesService.getScriptProperties().setProperty(
+    claveEdicionEventoTelegram(chatId),
+    JSON.stringify(contenido)
+  );
+  return contenido;
+}
+
+function obtenerEdicionEventoTelegram(chatId){
+  const clave=claveEdicionEventoTelegram(chatId);
+  const valor=PropertiesService.getScriptProperties().getProperty(clave);
+
+  if(!valor)return null;
+
+  try{
+    const flujo=JSON.parse(valor);
+
+    if(Date.now()-Number(flujo.actualizado||0)>60*60*1000){
+      PropertiesService.getScriptProperties().deleteProperty(clave);
+      return null;
+    }
+
+    return flujo;
+  }catch(_){
+    PropertiesService.getScriptProperties().deleteProperty(clave);
+    return null;
+  }
+}
+
+function borrarEdicionEventoTelegram(chatId){
+  PropertiesService.getScriptProperties().deleteProperty(
+    claveEdicionEventoTelegram(chatId)
+  );
+}
+
+function botIniciarEdicionEventoTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['idEvento']);
+
+  const evento=obtenerRegistrosAgenda().find(r=>
+    String(r.ID_EVENTO||'').trim()===String(datos.idEvento||'').trim()&&
+    String(r.ID_MAESTRA||'').trim()===enlace.idMaestra
+  );
+
+  if(!evento)throw new Error('No se encontró el evento.');
+
+  guardarEdicionEventoTelegram(enlace.chatId,{
+    idMaestra:enlace.idMaestra,
+    idEvento:String(evento.ID_EVENTO||''),
+    paso:'TITULO',
+    datos:{
+      titulo:String(evento.TITULO||''),
+      tipo:String(evento.TIPO||'OTRO').toUpperCase(),
+      fecha:normalizarFechaVisibleAgenda(evento.FECHA),
+      hora:normalizarHoraVisibleAgenda(evento.HORA),
+      descripcion:String(evento.DESCRIPCION||'')
+    }
+  });
+
+  return {
+    activo:true,
+    paso:'TITULO',
+    texto:[
+      '✏️ Editar evento',
+      '',
+      'Título actual: '+String(evento.TITULO||''),
+      '',
+      'Escribe el nuevo título.',
+      'Escribe un guion - para conservarlo.'
+    ].join('\n')
+  };
+}
+
+function botProcesarEdicionEventoTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['texto']);
+
+  const texto=String(datos.texto||'').trim();
+  const flujo=obtenerEdicionEventoTelegram(enlace.chatId);
+
+  if(!flujo)return {activo:false};
+
+  if(texto.toLowerCase()==='/cancelar'){
+    borrarEdicionEventoTelegram(enlace.chatId);
+
+    return {
+      activo:false,
+      cancelado:true,
+      texto:'❌ Edición del evento cancelada.'
+    };
+  }
+
+  flujo.datos=flujo.datos||{};
+
+  if(flujo.paso==='TITULO'){
+    if(texto!=='-'){
+      if(texto.length<2)throw new Error('El título debe tener al menos 2 caracteres.');
+      flujo.datos.titulo=texto;
+    }
+
+    flujo.paso='FECHA';
+    guardarEdicionEventoTelegram(enlace.chatId,flujo);
+
+    return {
+      activo:true,
+      paso:'FECHA',
+      texto:[
+        'Fecha actual: '+formatearFechaTelegram(flujo.datos.fecha),
+        '',
+        'Escribe la nueva fecha como DD/MM/AAAA.',
+        'Escribe un guion - para conservarla.'
+      ].join('\n')
+    };
+  }
+
+  if(flujo.paso==='FECHA'){
+    if(texto!=='-'){
+      flujo.datos.fecha=normalizarFechaEntradaAgendaTelegram(texto);
+    }
+
+    flujo.paso='HORA';
+    guardarEdicionEventoTelegram(enlace.chatId,flujo);
+
+    return {
+      activo:true,
+      paso:'HORA',
+      texto:[
+        'Hora actual: '+String(flujo.datos.hora||''),
+        '',
+        'Escribe la nueva hora como HH:MM.',
+        'Escribe un guion - para conservarla.'
+      ].join('\n')
+    };
+  }
+
+  if(flujo.paso==='HORA'){
+    if(texto!=='-'){
+      flujo.datos.hora=normalizarHoraEntradaTelegram(texto);
+    }
+
+    flujo.paso='DESCRIPCION';
+    guardarEdicionEventoTelegram(enlace.chatId,flujo);
+
+    return {
+      activo:true,
+      paso:'DESCRIPCION',
+      texto:[
+        'Descripción actual: '+(
+          String(flujo.datos.descripcion||'').trim()||'Sin descripción'
+        ),
+        '',
+        'Escribe la nueva descripción.',
+        'Escribe un guion - para conservarla.'
+      ].join('\n')
+    };
+  }
+
+  if(flujo.paso==='DESCRIPCION'){
+    if(texto!=='-')flujo.datos.descripcion=texto;
+
+    flujo.paso='CONFIRMAR';
+    guardarEdicionEventoTelegram(enlace.chatId,flujo);
+
+    return {
+      activo:true,
+      paso:'CONFIRMAR',
+      texto:[
+        '📅 Revisa los cambios',
+        '',
+        'Título: '+String(flujo.datos.titulo||''),
+        'Fecha: '+formatearFechaTelegram(flujo.datos.fecha),
+        'Hora: '+String(flujo.datos.hora||''),
+        'Descripción: '+(
+          String(flujo.datos.descripcion||'').trim()||'Sin descripción'
+        )
+      ].join('\n')
+    };
+  }
+
+  return {
+    activo:true,
+    paso:String(flujo.paso||''),
+    texto:'Continúa con el siguiente paso o escribe /cancelar.'
+  };
+}
+
+function botConfirmarEdicionEventoTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  const flujo=obtenerEdicionEventoTelegram(enlace.chatId);
+
+  if(!flujo||flujo.paso!=='CONFIRMAR'){
+    throw new Error('No hay una edición pendiente de confirmación.');
+  }
+
+  const evento=obtenerRegistrosAgenda().find(r=>
+    String(r.ID_EVENTO||'').trim()===String(flujo.idEvento||'').trim()&&
+    String(r.ID_MAESTRA||'').trim()===enlace.idMaestra
+  );
+
+  if(!evento)throw new Error('El evento ya no está disponible.');
+
+  const d=flujo.datos||{};
+  if(!d.titulo||!d.fecha||!d.hora){
+    throw new Error('Faltan datos obligatorios del evento.');
+  }
+
+  const hoja=obtenerHoja('AGENDA');
+
+  hoja.getRange(evento.__fila,3).setValue(limpiarTexto(d.titulo));
+  hoja.getRange(evento.__fila,5).setNumberFormat('@');
+  hoja.getRange(evento.__fila,5).setValue(String(d.fecha));
+  hoja.getRange(evento.__fila,6).setNumberFormat('@');
+  hoja.getRange(evento.__fila,6).setValue(String(d.hora));
+  hoja.getRange(evento.__fila,7).setValue(
+    limpiarTexto(d.descripcion||'')
+  );
+
+  registrarAuditoria(
+    enlace.idMaestra,
+    'EDITAR',
+    'AGENDA',
+    'Evento editado desde Telegram: '+limpiarTexto(d.titulo)
+  );
+
+  borrarEdicionEventoTelegram(enlace.chatId);
+
+  return {
+    activo:false,
+    guardado:true,
+    texto:'✅ Evento actualizado correctamente.'
+  };
+}
+
+function botCancelarEdicionEventoTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  borrarEdicionEventoTelegram(enlace.chatId);
+
+  return {
+    activo:false,
+    cancelado:true,
+    texto:'❌ Edición del evento cancelada.'
+  };
+}
+
+
+function claveEdicionReunionTelegram(chatId){
+  return 'TELEGRAM_REUNION_EDICION_'+String(chatId).trim();
+}
+
+function guardarEdicionReunionTelegram(chatId,flujo){
+  const contenido=Object.assign({},flujo,{actualizado:Date.now()});
+  PropertiesService.getScriptProperties().setProperty(
+    claveEdicionReunionTelegram(chatId),
+    JSON.stringify(contenido)
+  );
+  return contenido;
+}
+
+function obtenerEdicionReunionTelegram(chatId){
+  const clave=claveEdicionReunionTelegram(chatId);
+  const valor=PropertiesService.getScriptProperties().getProperty(clave);
+
+  if(!valor)return null;
+
+  try{
+    const flujo=JSON.parse(valor);
+
+    if(Date.now()-Number(flujo.actualizado||0)>60*60*1000){
+      PropertiesService.getScriptProperties().deleteProperty(clave);
+      return null;
+    }
+
+    return flujo;
+  }catch(_){
+    PropertiesService.getScriptProperties().deleteProperty(clave);
+    return null;
+  }
+}
+
+function borrarEdicionReunionTelegram(chatId){
+  PropertiesService.getScriptProperties().deleteProperty(
+    claveEdicionReunionTelegram(chatId)
+  );
+}
+
+function resumenEdicionReunionTelegram(datos){
+  return [
+    '🤝 Revisa los cambios',
+    '',
+    'Título: '+String(datos.titulo||''),
+    'Fecha: '+formatearFechaTelegram(datos.fecha),
+    'Hora: '+String(datos.hora||''),
+    'Lugar: '+(String(datos.lugar||'').trim()||'Sin indicar'),
+    'Participantes: '+(
+      String(datos.participantes||'').trim()||'Sin indicar'
+    ),
+    'Tema: '+(String(datos.tema||'').trim()||'Sin tema'),
+    'Acuerdos: '+(String(datos.acuerdos||'').trim()||'Sin acuerdos')
+  ].join('\n');
+}
+
+function botIniciarEdicionReunionTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['idReunion']);
+
+  const reunion=obtenerRegistrosConFila('REUNIONES').find(r=>
+    String(r.ID_REUNION||'').trim()===String(datos.idReunion||'').trim()&&
+    String(r.ID_MAESTRA||'').trim()===enlace.idMaestra
+  );
+
+  if(!reunion)throw new Error('No se encontró la reunión.');
+
+  guardarEdicionReunionTelegram(enlace.chatId,{
+    idMaestra:enlace.idMaestra,
+    idReunion:String(reunion.ID_REUNION||''),
+    paso:'TITULO',
+    datos:{
+      titulo:String(reunion.TITULO||''),
+      tipo:String(reunion.TIPO||'OTRA').toUpperCase(),
+      fecha:normalizarFechaTextoTelegram(reunion.FECHA),
+      hora:normalizarHoraVisibleAgenda(reunion.HORA),
+      lugar:String(reunion.LUGAR||''),
+      participantes:String(reunion.PARTICIPANTES||''),
+      tema:String(reunion.TEMAS||''),
+      acuerdos:String(reunion.ACUERDOS||'')
+    }
+  });
+
+  return {
+    activo:true,
+    paso:'TITULO',
+    texto:[
+      '✏️ Editar reunión',
+      '',
+      'Título actual: '+String(reunion.TITULO||''),
+      '',
+      'Escribe el nuevo título.',
+      'Escribe un guion - para conservarlo.'
+    ].join('\n')
+  };
+}
+
+function botProcesarEdicionReunionTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['texto']);
+
+  const texto=String(datos.texto||'').trim();
+  const flujo=obtenerEdicionReunionTelegram(enlace.chatId);
+
+  if(!flujo)return {activo:false};
+
+  if(texto.toLowerCase()==='/cancelar'){
+    borrarEdicionReunionTelegram(enlace.chatId);
+
+    return {
+      activo:false,
+      cancelado:true,
+      texto:'❌ Edición de la reunión cancelada.'
+    };
+  }
+
+  flujo.datos=flujo.datos||{};
+
+  if(flujo.paso==='TITULO'){
+    if(texto!=='-'){
+      if(texto.length<2){
+        throw new Error('El título debe tener al menos 2 caracteres.');
+      }
+      flujo.datos.titulo=texto;
+    }
+
+    flujo.paso='FECHA';
+    guardarEdicionReunionTelegram(enlace.chatId,flujo);
+
+    return {
+      activo:true,
+      paso:'FECHA',
+      texto:[
+        'Fecha actual: '+formatearFechaTelegram(flujo.datos.fecha),
+        '',
+        'Escribe la nueva fecha como DD/MM/AAAA.',
+        'Escribe un guion - para conservarla.'
+      ].join('\n')
+    };
+  }
+
+  if(flujo.paso==='FECHA'){
+    if(texto!=='-'){
+      flujo.datos.fecha=normalizarFechaEntradaAgendaTelegram(texto);
+    }
+
+    flujo.paso='HORA';
+    guardarEdicionReunionTelegram(enlace.chatId,flujo);
+
+    return {
+      activo:true,
+      paso:'HORA',
+      texto:[
+        'Hora actual: '+String(flujo.datos.hora||''),
+        '',
+        'Escribe la nueva hora como HH:MM.',
+        'Escribe un guion - para conservarla.'
+      ].join('\n')
+    };
+  }
+
+  if(flujo.paso==='HORA'){
+    if(texto!=='-'){
+      flujo.datos.hora=normalizarHoraEntradaTelegram(texto);
+    }
+
+    flujo.paso='LUGAR';
+    guardarEdicionReunionTelegram(enlace.chatId,flujo);
+
+    return {
+      activo:true,
+      paso:'LUGAR',
+      texto:[
+        'Lugar actual: '+(
+          String(flujo.datos.lugar||'').trim()||'Sin indicar'
+        ),
+        '',
+        'Escribe el nuevo lugar.',
+        'Escribe un guion - para conservarlo.'
+      ].join('\n')
+    };
+  }
+
+  if(flujo.paso==='LUGAR'){
+    if(texto!=='-')flujo.datos.lugar=texto;
+
+    flujo.paso='PARTICIPANTES';
+    guardarEdicionReunionTelegram(enlace.chatId,flujo);
+
+    return {
+      activo:true,
+      paso:'PARTICIPANTES',
+      texto:[
+        'Participantes actuales: '+(
+          String(flujo.datos.participantes||'').trim()||'Sin indicar'
+        ),
+        '',
+        'Escribe los nuevos participantes.',
+        'Escribe un guion - para conservarlos.'
+      ].join('\n')
+    };
+  }
+
+  if(flujo.paso==='PARTICIPANTES'){
+    if(texto!=='-')flujo.datos.participantes=texto;
+
+    flujo.paso='TEMA';
+    guardarEdicionReunionTelegram(enlace.chatId,flujo);
+
+    return {
+      activo:true,
+      paso:'TEMA',
+      texto:[
+        'Tema actual: '+(
+          String(flujo.datos.tema||'').trim()||'Sin tema'
+        ),
+        '',
+        'Escribe el nuevo tema.',
+        'Escribe un guion - para conservarlo.'
+      ].join('\n')
+    };
+  }
+
+  if(flujo.paso==='TEMA'){
+    if(texto!=='-')flujo.datos.tema=texto;
+
+    flujo.paso='ACUERDOS';
+    guardarEdicionReunionTelegram(enlace.chatId,flujo);
+
+    return {
+      activo:true,
+      paso:'ACUERDOS',
+      texto:[
+        'Acuerdos actuales: '+(
+          String(flujo.datos.acuerdos||'').trim()||'Sin acuerdos'
+        ),
+        '',
+        'Escribe los nuevos acuerdos.',
+        'Escribe un guion - para conservarlos.'
+      ].join('\n')
+    };
+  }
+
+  if(flujo.paso==='ACUERDOS'){
+    if(texto!=='-')flujo.datos.acuerdos=texto;
+
+    flujo.paso='CONFIRMAR';
+    guardarEdicionReunionTelegram(enlace.chatId,flujo);
+
+    return {
+      activo:true,
+      paso:'CONFIRMAR',
+      texto:resumenEdicionReunionTelegram(flujo.datos)
+    };
+  }
+
+  return {
+    activo:true,
+    paso:String(flujo.paso||''),
+    texto:'Continúa con el siguiente paso o escribe /cancelar.'
+  };
+}
+
+function botConfirmarEdicionReunionTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  const flujo=obtenerEdicionReunionTelegram(enlace.chatId);
+
+  if(!flujo||flujo.paso!=='CONFIRMAR'){
+    throw new Error('No hay una edición pendiente de confirmación.');
+  }
+
+  const reunion=obtenerRegistrosConFila('REUNIONES').find(r=>
+    String(r.ID_REUNION||'').trim()===String(flujo.idReunion||'').trim()&&
+    String(r.ID_MAESTRA||'').trim()===enlace.idMaestra
+  );
+
+  if(!reunion)throw new Error('La reunión ya no está disponible.');
+
+  const d=flujo.datos||{};
+
+  if(!d.titulo||!d.fecha||!d.hora){
+    throw new Error('Faltan datos obligatorios de la reunión.');
+  }
+
+  const hoja=obtenerHoja('REUNIONES');
+
+  // Columnas:
+  // 3 TITULO, 5 FECHA, 6 HORA, 7 LUGAR,
+  // 8 PARTICIPANTES, 9 TEMAS, 10 ACUERDOS, 11 ESTADO.
+  hoja.getRange(reunion.__fila,3).setValue(limpiarTexto(d.titulo));
+
+  hoja.getRange(reunion.__fila,5).setNumberFormat('@');
+  hoja.getRange(reunion.__fila,5).setValue(String(d.fecha));
+
+  hoja.getRange(reunion.__fila,6).setNumberFormat('@');
+  hoja.getRange(reunion.__fila,6).setValue(String(d.hora));
+
+  hoja.getRange(reunion.__fila,7,1,4).setValues([[
+    limpiarTexto(d.lugar||''),
+    limpiarTexto(d.participantes||''),
+    limpiarTexto(d.tema||''),
+    limpiarTexto(d.acuerdos||'')
+  ]]);
+
+  registrarAuditoria(
+    enlace.idMaestra,
+    'EDITAR',
+    'REUNIONES',
+    'Reunión editada desde Telegram: '+limpiarTexto(d.titulo)
+  );
+
+  borrarEdicionReunionTelegram(enlace.chatId);
+
+  return {
+    activo:false,
+    guardado:true,
+    texto:'✅ Reunión actualizada correctamente.\n\n'+
+      resumenEdicionReunionTelegram(d)
+  };
+}
+
+function botCancelarEdicionReunionTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  borrarEdicionReunionTelegram(enlace.chatId);
+
+  return {
+    activo:false,
+    cancelado:true,
+    texto:'❌ Edición de la reunión cancelada.'
+  };
+}
+
+
+function claveEdicionPlanTelegram(chatId){
+  return 'TELEGRAM_PLAN_EDICION_'+String(chatId).trim();
+}
+
+function guardarEdicionPlanTelegram(chatId,flujo){
+  const contenido=Object.assign({},flujo,{actualizado:Date.now()});
+  PropertiesService.getScriptProperties().setProperty(
+    claveEdicionPlanTelegram(chatId),
+    JSON.stringify(contenido)
+  );
+  return contenido;
+}
+
+function obtenerEdicionPlanTelegram(chatId){
+  const clave=claveEdicionPlanTelegram(chatId);
+  const valor=PropertiesService.getScriptProperties().getProperty(clave);
+
+  if(!valor)return null;
+
+  try{
+    const flujo=JSON.parse(valor);
+
+    if(Date.now()-Number(flujo.actualizado||0)>60*60*1000){
+      PropertiesService.getScriptProperties().deleteProperty(clave);
+      return null;
+    }
+
+    return flujo;
+  }catch(_){
+    PropertiesService.getScriptProperties().deleteProperty(clave);
+    return null;
+  }
+}
+
+function borrarEdicionPlanTelegram(chatId){
+  PropertiesService.getScriptProperties().deleteProperty(
+    claveEdicionPlanTelegram(chatId)
+  );
+}
+
+function resumenEdicionPlanTelegram(datos){
+  return [
+    '📚 Revisa los cambios',
+    '',
+    'Título: '+String(datos.titulo||''),
+    'Asignatura: '+String(datos.asignatura||''),
+    'Grado: '+(String(datos.grado||'').trim()||'Sin indicar'),
+    'Fecha: '+formatearFechaTelegram(datos.fecha),
+    'Objetivo: '+(String(datos.objetivo||'').trim()||'Sin objetivo'),
+    'Contenido: '+(String(datos.contenido||'').trim()||'Sin contenido'),
+    'Actividades: '+(String(datos.actividades||'').trim()||'Sin actividades'),
+    'Recursos: '+(String(datos.recursos||'').trim()||'Sin recursos'),
+    'Evaluación: '+(String(datos.evaluacion||'').trim()||'Sin evaluación')
+  ].join('\n');
+}
+
+function botIniciarEdicionPlanTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['idPlanificacion']);
+
+  const plan=obtenerRegistrosConFila('PLANIFICACION').find(r=>
+    String(r.ID_PLANIFICACION||'').trim()===
+      String(datos.idPlanificacion||'').trim()&&
+    String(r.ID_MAESTRA||'').trim()===enlace.idMaestra
+  );
+
+  if(!plan)throw new Error('No se encontró la planificación.');
+
+  guardarEdicionPlanTelegram(enlace.chatId,{
+    idMaestra:enlace.idMaestra,
+    idPlanificacion:String(plan.ID_PLANIFICACION||''),
+    paso:'TITULO',
+    datos:{
+      titulo:String(plan.TITULO||''),
+      asignatura:String(plan.ASIGNATURA||''),
+      grado:String(plan.GRADO||''),
+      fecha:normalizarFechaTextoTelegram(plan.FECHA),
+      objetivo:String(plan.OBJETIVO||''),
+      contenido:String(plan.CONTENIDO||''),
+      actividades:String(plan.ACTIVIDADES||''),
+      recursos:String(plan.RECURSOS||''),
+      evaluacion:String(plan.EVALUACION||'')
+    }
+  });
+
+  return {
+    activo:true,
+    paso:'TITULO',
+    texto:[
+      '✏️ Editar planificación',
+      '',
+      'Título actual: '+String(plan.TITULO||''),
+      '',
+      'Escribe el nuevo título.',
+      'Escribe un guion - para conservarlo.'
+    ].join('\n')
+  };
+}
+
+function botProcesarEdicionPlanTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['texto']);
+
+  const texto=String(datos.texto||'').trim();
+  const flujo=obtenerEdicionPlanTelegram(enlace.chatId);
+
+  if(!flujo)return {activo:false};
+
+  if(texto.toLowerCase()==='/cancelar'){
+    borrarEdicionPlanTelegram(enlace.chatId);
+    return {
+      activo:false,
+      cancelado:true,
+      texto:'❌ Edición de la planificación cancelada.'
+    };
+  }
+
+  flujo.datos=flujo.datos||{};
+
+  if(flujo.paso==='TITULO'){
+    if(texto!=='-'){
+      if(texto.length<2){
+        throw new Error('El título debe tener al menos 2 caracteres.');
+      }
+      flujo.datos.titulo=texto;
+    }
+    flujo.paso='ASIGNATURA';
+    guardarEdicionPlanTelegram(enlace.chatId,flujo);
+    return {
+      activo:true,
+      paso:'ASIGNATURA',
+      texto:'Escribe la nueva asignatura.\n\nEscribe un guion - para conservarla.'
+    };
+  }
+
+  if(flujo.paso==='ASIGNATURA'){
+    if(texto!=='-')flujo.datos.asignatura=texto;
+    flujo.paso='GRADO';
+    guardarEdicionPlanTelegram(enlace.chatId,flujo);
+    return {
+      activo:true,
+      paso:'GRADO',
+      texto:'Escribe el nuevo grado.\n\nEscribe un guion - para conservarlo.'
+    };
+  }
+
+  if(flujo.paso==='GRADO'){
+    if(texto!=='-')flujo.datos.grado=texto;
+    flujo.paso='FECHA';
+    guardarEdicionPlanTelegram(enlace.chatId,flujo);
+    return {
+      activo:true,
+      paso:'FECHA',
+      texto:[
+        'Fecha actual: '+formatearFechaTelegram(flujo.datos.fecha),
+        '',
+        'Escribe la nueva fecha como DD/MM/AAAA.',
+        'Escribe un guion - para conservarla.'
+      ].join('\n')
+    };
+  }
+
+  if(flujo.paso==='FECHA'){
+    if(texto!=='-'){
+      flujo.datos.fecha=normalizarFechaEntradaAgendaTelegram(texto);
+    }
+    flujo.paso='OBJETIVO';
+    guardarEdicionPlanTelegram(enlace.chatId,flujo);
+    return {
+      activo:true,
+      paso:'OBJETIVO',
+      texto:'Escribe el nuevo objetivo.\n\nEscribe un guion - para conservarlo.'
+    };
+  }
+
+  if(flujo.paso==='OBJETIVO'){
+    if(texto!=='-')flujo.datos.objetivo=texto;
+    flujo.paso='CONTENIDO';
+    guardarEdicionPlanTelegram(enlace.chatId,flujo);
+    return {
+      activo:true,
+      paso:'CONTENIDO',
+      texto:'Escribe el nuevo contenido.\n\nEscribe un guion - para conservarlo.'
+    };
+  }
+
+  if(flujo.paso==='CONTENIDO'){
+    if(texto!=='-')flujo.datos.contenido=texto;
+    flujo.paso='ACTIVIDADES';
+    guardarEdicionPlanTelegram(enlace.chatId,flujo);
+    return {
+      activo:true,
+      paso:'ACTIVIDADES',
+      texto:'Escribe las nuevas actividades.\n\nEscribe un guion - para conservarlas.'
+    };
+  }
+
+  if(flujo.paso==='ACTIVIDADES'){
+    if(texto!=='-')flujo.datos.actividades=texto;
+    flujo.paso='RECURSOS';
+    guardarEdicionPlanTelegram(enlace.chatId,flujo);
+    return {
+      activo:true,
+      paso:'RECURSOS',
+      texto:'Escribe los nuevos recursos.\n\nEscribe un guion - para conservarlos.'
+    };
+  }
+
+  if(flujo.paso==='RECURSOS'){
+    if(texto!=='-')flujo.datos.recursos=texto;
+    flujo.paso='EVALUACION';
+    guardarEdicionPlanTelegram(enlace.chatId,flujo);
+    return {
+      activo:true,
+      paso:'EVALUACION',
+      texto:'Escribe la nueva evaluación.\n\nEscribe un guion - para conservarla.'
+    };
+  }
+
+  if(flujo.paso==='EVALUACION'){
+    if(texto!=='-')flujo.datos.evaluacion=texto;
+    flujo.paso='CONFIRMAR';
+    guardarEdicionPlanTelegram(enlace.chatId,flujo);
+    return {
+      activo:true,
+      paso:'CONFIRMAR',
+      texto:resumenEdicionPlanTelegram(flujo.datos)
+    };
+  }
+
+  return {
+    activo:true,
+    paso:String(flujo.paso||''),
+    texto:'Continúa con el siguiente paso o escribe /cancelar.'
+  };
+}
+
+function botConfirmarEdicionPlanTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  const flujo=obtenerEdicionPlanTelegram(enlace.chatId);
+
+  if(!flujo||flujo.paso!=='CONFIRMAR'){
+    throw new Error('No hay una edición pendiente de confirmación.');
+  }
+
+  const plan=obtenerRegistrosConFila('PLANIFICACION').find(r=>
+    String(r.ID_PLANIFICACION||'').trim()===
+      String(flujo.idPlanificacion||'').trim()&&
+    String(r.ID_MAESTRA||'').trim()===enlace.idMaestra
+  );
+
+  if(!plan)throw new Error('La planificación ya no está disponible.');
+
+  const d=flujo.datos||{};
+
+  if(!d.titulo||!d.asignatura||!d.fecha){
+    throw new Error('Faltan datos obligatorios de la planificación.');
+  }
+
+  const hoja=obtenerHoja('PLANIFICACION');
+
+  // Columnas 3 a 11:
+  // TITULO, ASIGNATURA, GRADO, FECHA, OBJETIVO,
+  // CONTENIDO, ACTIVIDADES, RECURSOS, EVALUACION.
+  hoja.getRange(plan.__fila,3,1,9).setValues([[
+    limpiarTexto(d.titulo),
+    limpiarTexto(d.asignatura),
+    limpiarTexto(d.grado||''),
+    String(d.fecha),
+    limpiarTexto(d.objetivo||''),
+    limpiarTexto(d.contenido||''),
+    limpiarTexto(d.actividades||''),
+    limpiarTexto(d.recursos||''),
+    limpiarTexto(d.evaluacion||'')
+  ]]);
+
+  hoja.getRange(plan.__fila,6).setNumberFormat('@');
+  hoja.getRange(plan.__fila,6).setValue(String(d.fecha));
+
+  registrarAuditoria(
+    enlace.idMaestra,
+    'EDITAR',
+    'PLANIFICACION',
+    'Planificación editada desde Telegram: '+limpiarTexto(d.titulo)
+  );
+
+  borrarEdicionPlanTelegram(enlace.chatId);
+
+  return {
+    activo:false,
+    guardado:true,
+    texto:'✅ Planificación actualizada correctamente.\n\n'+
+      resumenEdicionPlanTelegram(d)
+  };
+}
+
+function botCancelarEdicionPlanTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  borrarEdicionPlanTelegram(enlace.chatId);
+
+  return {
+    activo:false,
+    cancelado:true,
+    texto:'❌ Edición de la planificación cancelada.'
+  };
+}
+
+
+function activarRecordatoriosAutomaticos(){
+  const funcion='procesarRecordatoriosAutomaticos';
+
+  ScriptApp.getProjectTriggers()
+    .filter(t=>t.getHandlerFunction()===funcion)
+    .forEach(t=>ScriptApp.deleteTrigger(t));
+
+  ScriptApp.newTrigger(funcion)
+    .timeBased()
+    .everyHours(1)
+    .create();
+
+  PropertiesService.getScriptProperties()
+    .setProperty('RECORDATORIOS_AUTOMATICOS','SI');
+
+  SpreadsheetApp.getUi().alert(
+    'Recordatorios activados',
+    'Aula Mágica revisará cada hora y enviará cada aviso una sola vez.',
+    SpreadsheetApp.getUi().ButtonSet.OK
+  );
+}
+
+function desactivarRecordatoriosAutomaticos(){
+  const funcion='procesarRecordatoriosAutomaticos';
+
+  ScriptApp.getProjectTriggers()
+    .filter(t=>t.getHandlerFunction()===funcion)
+    .forEach(t=>ScriptApp.deleteTrigger(t));
+
+  PropertiesService.getScriptProperties()
+    .setProperty('RECORDATORIOS_AUTOMATICOS','NO');
+
+  SpreadsheetApp.getUi().alert(
+    'Recordatorios desactivados',
+    'No se enviarán nuevos avisos automáticos.',
+    SpreadsheetApp.getUi().ButtonSet.OK
+  );
+}
+
+function probarRecordatoriosAutomaticos(){
+  const resultado=procesarRecordatoriosAutomaticos(true);
+
+  SpreadsheetApp.getUi().alert(
+    'Prueba terminada',
+    'Mensajes enviados: '+Number(resultado.enviados||0),
+    SpreadsheetApp.getUi().ButtonSet.OK
+  );
+}
+
+function obtenerEnlacesTelegramActivosRecordatorios(){
+  return obtenerRegistros('TELEGRAM')
+    .filter(r=>
+      String(r.ESTADO||'').trim().toUpperCase()==='VINCULADO'&&
+      String(r.ID_MAESTRA||'').trim()&&
+      String(r.CHAT_ID||'').trim()
+    )
+    .map(r=>({
+      idMaestra:String(r.ID_MAESTRA||'').trim(),
+      chatId:String(r.CHAT_ID||'').trim()
+    }));
+}
+
+function sumarDiasFechaTelegram(fecha,cantidad){
+  const partes=String(fecha||'').split('-').map(Number);
+  const valor=new Date(
+    Date.UTC(
+      Number(partes[0]||0),
+      Number(partes[1]||1)-1,
+      Number(partes[2]||1)
+    )
+  );
+
+  valor.setUTCDate(valor.getUTCDate()+Number(cantidad||0));
+
+  return [
+    valor.getUTCFullYear(),
+    String(valor.getUTCMonth()+1).padStart(2,'0'),
+    String(valor.getUTCDate()).padStart(2,'0')
+  ].join('-');
+}
+
+function claveAvisoAutomaticoTelegram(tipo,idMaestra,fecha){
+  return [
+    'AVISO_TELEGRAM',
+    String(tipo||''),
+    String(idMaestra||''),
+    String(fecha||'')
+  ].join('_');
+}
+
+function avisoAutomaticoYaEnviadoTelegram(tipo,idMaestra,fecha){
+  return PropertiesService.getScriptProperties().getProperty(
+    claveAvisoAutomaticoTelegram(tipo,idMaestra,fecha)
+  )==='SI';
+}
+
+function marcarAvisoAutomaticoTelegram(tipo,idMaestra,fecha){
+  PropertiesService.getScriptProperties().setProperty(
+    claveAvisoAutomaticoTelegram(tipo,idMaestra,fecha),
+    'SI'
+  );
+}
+
+function nombreMaestraRecordatorioTelegram(idMaestra){
+  const maestra=obtenerRegistros('MAESTRAS').find(r=>
+    String(r.ID_MAESTRA||'').trim()===String(idMaestra||'').trim()
+  );
+
+  if(!maestra)return 'Maestra';
+
+  return (
+    String(maestra.NOMBRE||'')+' '+String(maestra.APELLIDO||'')
+  ).trim()||'Maestra';
+}
+
+function construirRecordatorioMananaTelegram(idMaestra,hoy,manana){
+  const lineas=[
+    '🌅 Buenos días, '+nombreMaestraRecordatorioTelegram(idMaestra),
+    '',
+    'Este es tu resumen de Aula Mágica.'
+  ];
+
+  const reuniones=obtenerRegistros('REUNIONES')
+    .filter(r=>
+      String(r.ID_MAESTRA||'').trim()===idMaestra&&
+      !['REALIZADA','CANCELADA'].includes(
+        String(r.ESTADO||'').trim().toUpperCase()
+      )&&
+      [hoy,manana].includes(normalizarFechaTextoTelegram(r.FECHA))
+    )
+    .sort((a,b)=>
+      (
+        normalizarFechaTextoTelegram(a.FECHA)+' '+
+        normalizarHoraVisibleAgenda(a.HORA)
+      ).localeCompare(
+        normalizarFechaTextoTelegram(b.FECHA)+' '+
+        normalizarHoraVisibleAgenda(b.HORA)
+      )
+    );
+
+  const eventos=obtenerRegistrosAgenda()
+    .filter(r=>
+      String(r.ID_MAESTRA||'').trim()===idMaestra&&
+      String(r.ESTADO||'').trim().toUpperCase()==='PENDIENTE'&&
+      [hoy,manana].includes(normalizarFechaVisibleAgenda(r.FECHA))
+    )
+    .sort((a,b)=>
+      (
+        normalizarFechaVisibleAgenda(a.FECHA)+' '+
+        normalizarHoraVisibleAgenda(a.HORA)
+      ).localeCompare(
+        normalizarFechaVisibleAgenda(b.FECHA)+' '+
+        normalizarHoraVisibleAgenda(b.HORA)
+      )
+    );
+
+  const alumnos=obtenerRegistros('ALUMNOS').filter(r=>
+    String(r.ID_MAESTRA||'').trim()===idMaestra&&
+    String(r.ESTADO||'').trim().toUpperCase()==='ACTIVO'
+  );
+
+  const mesDiaHoy=hoy.slice(5);
+  const cumpleanos=alumnos
+    .filter(r=>{
+      const fecha=formatearFechaParaFormulario(r.FECHA_NACIMIENTO);
+      return fecha&&fecha.slice(5)===mesDiaHoy;
+    })
+    .map(r=>(
+      String(r.NOMBRE||'')+' '+String(r.APELLIDO||'')
+    ).trim());
+
+  const planes=obtenerRegistros('PLANIFICACION')
+    .filter(r=>{
+      if(String(r.ID_MAESTRA||'').trim()!==idMaestra)return false;
+      if(String(r.ESTADO||'').trim().toUpperCase()==='COMPLETADA')return false;
+
+      const fecha=normalizarFechaTextoTelegram(r.FECHA);
+      return fecha&&fecha<=manana;
+    })
+    .sort((a,b)=>
+      normalizarFechaTextoTelegram(a.FECHA)
+        .localeCompare(normalizarFechaTextoTelegram(b.FECHA))
+    )
+    .slice(0,8);
+
+  lineas.push('');
+  lineas.push('🤝 Reuniones de hoy y mañana: '+reuniones.length);
+
+  reuniones.slice(0,5).forEach(r=>{
+    const fecha=normalizarFechaTextoTelegram(r.FECHA);
+    const cuando=fecha===hoy?'Hoy':'Mañana';
+
+    lineas.push(
+      '• '+cuando+' '+normalizarHoraVisibleAgenda(r.HORA)+
+      ' · '+String(r.TITULO||'Reunión')
+    );
+  });
+
+  lineas.push('');
+  lineas.push('📅 Eventos de hoy y mañana: '+eventos.length);
+
+  eventos.slice(0,5).forEach(r=>{
+    const fecha=normalizarFechaVisibleAgenda(r.FECHA);
+    const cuando=fecha===hoy?'Hoy':'Mañana';
+
+    lineas.push(
+      '• '+cuando+' '+normalizarHoraVisibleAgenda(r.HORA)+
+      ' · '+String(r.TITULO||'Evento')
+    );
+  });
+
+  lineas.push('');
+  lineas.push('🎂 Cumpleaños de hoy: '+cumpleanos.length);
+
+  cumpleanos.slice(0,8).forEach(nombre=>{
+    lineas.push('• '+nombre);
+  });
+
+  lineas.push('');
+  lineas.push('📚 Planificaciones pendientes: '+planes.length);
+
+  planes.slice(0,5).forEach(r=>{
+    const fecha=normalizarFechaTextoTelegram(r.FECHA);
+    const etiqueta=fecha<hoy?'Vencida':(fecha===hoy?'Hoy':'Mañana');
+
+    lineas.push(
+      '• '+etiqueta+' · '+String(r.TITULO||'Planificación')
+    );
+  });
+
+  if(
+    !reuniones.length&&
+    !eventos.length&&
+    !cumpleanos.length&&
+    !planes.length
+  ){
+    lineas.push('');
+    lineas.push('✨ No tienes pendientes importantes para hoy.');
+  }
+
+  return lineas.join('\n');
+}
+
+function construirResumenAsistenciaTelegram(idMaestra,hoy){
+  const alumnos=obtenerRegistros('ALUMNOS').filter(r=>
+    String(r.ID_MAESTRA||'').trim()===idMaestra&&
+    String(r.ESTADO||'').trim().toUpperCase()==='ACTIVO'
+  );
+
+  const registros=obtenerRegistros('ASISTENCIA').filter(r=>
+    String(r.ID_MAESTRA||'').trim()===idMaestra&&
+    normalizarFechaAsistencia(r.FECHA)===hoy
+  );
+
+  const conteo={
+    PRESENTE:0,
+    AUSENTE:0,
+    TARDE:0,
+    JUSTIFICADO:0
+  };
+
+  registros.forEach(r=>{
+    const estado=String(r.ESTADO||'').trim().toUpperCase();
+
+    if(Object.prototype.hasOwnProperty.call(conteo,estado)){
+      conteo[estado]++;
+    }
+  });
+
+  return [
+    '🌙 Resumen de asistencia',
+    '',
+    'Fecha: '+formatearFechaTelegram(hoy),
+    'Alumnos activos: '+alumnos.length,
+    '🟢 Presentes: '+conteo.PRESENTE,
+    '🔴 Ausentes: '+conteo.AUSENTE,
+    '⏰ Tardanzas: '+conteo.TARDE,
+    '📄 Justificados: '+conteo.JUSTIFICADO,
+    '➖ Sin registrar: '+Math.max(0,alumnos.length-registros.length)
+  ].join('\n');
+}
+
+function procesarRecordatoriosAutomaticos(forzarPrueba){
+  const propiedades=PropertiesService.getScriptProperties();
+
+  if(
+    !forzarPrueba&&
+    propiedades.getProperty('RECORDATORIOS_AUTOMATICOS')!=='SI'
+  ){
+    return {enviados:0,activo:false};
+  }
+
+  const zona=obtenerZonaHorariaAulaMagica();
+  const ahora=new Date();
+  const hoy=Utilities.formatDate(ahora,zona,'yyyy-MM-dd');
+  const hora=Number(Utilities.formatDate(ahora,zona,'H'));
+  const manana=sumarDiasFechaTelegram(hoy,1);
+  const enlaces=obtenerEnlacesTelegramActivosRecordatorios();
+  let enviados=0;
+
+  enlaces.forEach(enlace=>{
+    try{
+      const enviarManana=
+        Boolean(forzarPrueba)||
+        (
+          hora>=7&&
+          hora<=10&&
+          !avisoAutomaticoYaEnviadoTelegram(
+            'MANANA',
+            enlace.idMaestra,
+            hoy
+          )
+        );
+
+      if(enviarManana){
+        enviarMensajeTelegram(
+          enlace.chatId,
+          construirRecordatorioMananaTelegram(
+            enlace.idMaestra,
+            hoy,
+            manana
+          ),
+          false
+        );
+
+        if(!forzarPrueba){
+          marcarAvisoAutomaticoTelegram(
+            'MANANA',
+            enlace.idMaestra,
+            hoy
+          );
+        }
+
+        enviados++;
+      }
+
+      const enviarAsistencia=
+        !forzarPrueba&&
+        hora>=17&&
+        hora<=20&&
+        !avisoAutomaticoYaEnviadoTelegram(
+          'ASISTENCIA',
+          enlace.idMaestra,
+          hoy
+        );
+
+      if(enviarAsistencia){
+        enviarMensajeTelegram(
+          enlace.chatId,
+          construirResumenAsistenciaTelegram(
+            enlace.idMaestra,
+            hoy
+          ),
+          false
+        );
+
+        marcarAvisoAutomaticoTelegram(
+          'ASISTENCIA',
+          enlace.idMaestra,
+          hoy
+        );
+
+        enviados++;
+      }
+    }catch(error){
+      console.error(
+        'Error enviando recordatorio a '+enlace.chatId+': '+
+        String(error&&error.message||error)
+      );
+    }
+  });
+
+  return {
+    enviados:enviados,
+    activo:true,
+    fecha:hoy,
+    hora:hora
+  };
+}
+
+
+function actualizarPerfilMaestra(token,datos){
+  const actual=verificarSesion(token);
+  validarObjeto(datos,['nombre','apellido']);
+  const hoja=obtenerHoja('MAESTRAS');
+  const registro=obtenerRegistrosConFila('MAESTRAS').find(r=>String(r.ID_MAESTRA)===String(actual.idMaestra));
+  if(!registro) throw new Error('No se encontró la cuenta de la maestra.');
+  const nombre=limpiarTexto(datos.nombre);
+  const apellido=limpiarTexto(datos.apellido);
+  const grado=limpiarTexto(datos.grado||'');
+  const seccion=limpiarTexto(datos.seccion||'');
+  if(nombre.length<2) throw new Error('El nombre debe tener al menos dos caracteres.');
+  if(apellido.length<2) throw new Error('El apellido debe tener al menos dos caracteres.');
+  hoja.getRange(registro.__fila,2,1,2).setValues([[nombre,apellido]]);
+  hoja.getRange(registro.__fila,7,1,2).setValues([[grado,seccion]]);
+  registrarAuditoria(actual.idMaestra,'EDITAR','PERFIL','Perfil de maestra actualizado');
+  return {
+    idMaestra:String(actual.idMaestra),nombre:nombre,apellido:apellido,
+    correo:String(registro.CORREO||''),usuario:String(registro.USUARIO||''),
+    grado:grado,seccion:seccion
+  };
+}
+
+function cambiarContrasenaMaestra(token,datos){
+  const actual=verificarSesion(token);
+  validarObjeto(datos,['contrasenaActual','contrasenaNueva']);
+  const nueva=String(datos.contrasenaNueva||'');
+  if(nueva.length<6) throw new Error('La nueva contraseña debe tener al menos seis caracteres.');
+  const hoja=obtenerHoja('MAESTRAS');
+  const registro=obtenerRegistrosConFila('MAESTRAS').find(r=>String(r.ID_MAESTRA)===String(actual.idMaestra));
+  if(!registro) throw new Error('No se encontró la cuenta de la maestra.');
+  if(crearHashContrasena(String(datos.contrasenaActual||''))!==String(registro.CONTRASENA_HASH||''))
+    throw new Error('La contraseña actual no es correcta.');
+  hoja.getRange(registro.__fila,6).setValue(crearHashContrasena(nueva));
+  registrarAuditoria(actual.idMaestra,'EDITAR','SEGURIDAD','Contraseña actualizada');
+  return {actualizado:true};
+}

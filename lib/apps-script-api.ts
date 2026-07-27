@@ -165,6 +165,53 @@ export async function guardarAsistencia(
   });
 }
 
+
+export type ResumenEstadoAsistencia = {
+  PRESENTE: number;
+  AUSENTE: number;
+  TARDE: number;
+  JUSTIFICADO: number;
+  SIN_MARCAR: number;
+};
+
+export type AlumnoAsistenciaMensual = {
+  idAlumno: string;
+  nombre: string;
+  apellido: string;
+  grado: string;
+  seccion: string;
+  estados: Record<string, EstadoAsistencia>;
+  resumen: ResumenEstadoAsistencia;
+};
+
+export type InasistenciaMensual = {
+  idAsistencia: string;
+  idAlumno: string;
+  nombreAlumno: string;
+  fecha: string;
+  estado: Exclude<EstadoAsistencia, "">;
+  observaciones: string;
+};
+
+export type ResumenMensualAsistencia = {
+  mes: string;
+  dias: number[];
+  alumnos: AlumnoAsistenciaMensual[];
+  totales: ResumenEstadoAsistencia;
+  inasistencias: InasistenciaMensual[];
+};
+
+export async function listarResumenMensualAsistencia(
+  token: string,
+  mes: string
+) {
+  return llamarAppsScript<ResumenMensualAsistencia>({
+    action: "listarResumenMensualAsistencia",
+    token,
+    data: { mes },
+  });
+}
+
 export type Calificacion = {
   idCalificacion: string;
   idAlumno: string;
