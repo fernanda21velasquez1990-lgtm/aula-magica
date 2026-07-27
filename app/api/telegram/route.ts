@@ -36,6 +36,7 @@ type BotResult = {
     nombre: string;
     grado?: string;
     seccion?: string;
+    estado?: string;
   }>;
   activo?: boolean;
   paso?: string;
@@ -1031,7 +1032,7 @@ function studentsManageListKeyboard(
     nombre: string;
     grado?: string;
     seccion?: string;
-    estado: string;
+    estado?: string;
   }>
 ) {
   const rows = students.slice(0, 30).map((student) => [
