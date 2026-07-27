@@ -1479,6 +1479,59 @@ function vaultPurchaseKeyboard(purchase?: {
   return { inline_keyboard: rows };
 }
 
+
+function schoolCalendarKeyboard() {
+  return {
+    inline_keyboard: [
+      [
+        { text: "📅 Próximos", callback_data: "calendario" },
+        { text: "☀️ Hoy", callback_data: "calendario_hoy" },
+      ],
+      [{ text: "🌤️ Mañana", callback_data: "calendario_manana" }],
+      [{ text: "✍️ Cómo crear o editar", callback_data: "calendar_help" }],
+      [{ text: "⬅️ Volver al menú", callback_data: "inicio" }],
+    ],
+  };
+}
+
+function schoolScheduleKeyboard() {
+  return {
+    inline_keyboard: [
+      [
+        { text: "Lunes", callback_data: "horario:MONDAY" },
+        { text: "Martes", callback_data: "horario:TUESDAY" },
+      ],
+      [
+        { text: "Miércoles", callback_data: "horario:WEDNESDAY" },
+        { text: "Jueves", callback_data: "horario:THURSDAY" },
+      ],
+      [
+        { text: "Viernes", callback_data: "horario:FRIDAY" },
+        { text: "Sábado", callback_data: "horario:SATURDAY" },
+      ],
+      [{ text: "Domingo", callback_data: "horario:SUNDAY" }],
+      [{ text: "✍️ Cómo crear o editar", callback_data: "schedule_help" }],
+      [{ text: "⬅️ Volver al menú", callback_data: "inicio" }],
+    ],
+  };
+}
+
+function translateScheduleCommand(command: string): string {
+  const map: Record<string, string> = {
+    MONDAY: "LUNES",
+    TUESDAY: "MARTES",
+    WEDNESDAY: "MIERCOLES",
+    THURSDAY: "JUEVES",
+    FRIDAY: "VIERNES",
+    SATURDAY: "SABADO",
+    SUNDAY: "DOMINGO",
+  };
+
+  if (!command.startsWith("horario:")) return command;
+  const day = command.split(":")[1] || "";
+  return `horario:${map[day] || day}`;
+}
+
 function mainMenuKeyboard(linked = true) {
   const rows: InlineButton[][] = linked
     ? [
@@ -1497,6 +1550,10 @@ function mainMenuKeyboard(linked = true) {
         [
           { text: "🤝 Reuniones", callback_data: "meetings_menu" },
           { text: "📅 Agenda", callback_data: "agenda_menu" },
+        ],
+        [
+          { text: "🏫 Calendario escolar", callback_data: "school_calendar_menu" },
+          { text: "🗓️ Horario semanal", callback_data: "school_schedule_menu" },
         ],
         [
           { text: "📊 Reportes", callback_data: "reports_menu" },
@@ -1563,7 +1620,139 @@ async function handleUpdate(update: TelegramUpdate) {
 
   await answerCallback(callback?.id);
 
-  const { command, argument } = commandFromText(rawText);
+  const parsed = commandFromText(rawText);
+  const command = translateScheduleCommand(parsed.command);
+  const argument = parsed.argument;
+
+  if (command === "school_calendar_menu") {
+    await sendMessage(
+      chatId,
+      "🏫 <b>Calendario escolar</b>\n\nConsulta actividades o usa los comandos para crear, editar y eliminar.",
+      true,
+      schoolCalendarKeyboard()
+    );
+    return;
+  }
+
+  if (command === "school_schedule_menu") {
+    await sendMessage(
+      chatId,
+      "🗓️ <b>Horario semanal</b>\n\nSelecciona el día que deseas consultar.",
+      true,
+      schoolScheduleKeyboard()
+    );
+    return;
+  }
+
+  if (command === "calendar_help") {
+    await sendMessage(
+      chatId,
+      [
+        "🏫 <b>Administrar calendario desde Telegram</b>",
+        "",
+        "<b>Crear:</b>",
+        "<code>/crear_evento Reunión de padres | REUNION | 2026-08-15 | 09:00 | Aula 2</code>",
+        "",
+        "<b>Editar:</b>",
+        "<code>/editar_evento ID | Nuevo título | EVENTO | 2026-08-16 | 10:00 | Patio</code>",
+        "",
+        "<b>Eliminar:</b>",
+        "<code>/eliminar_evento ID</code>",
+      ].join("\n"),
+      true,
+      schoolCalendarKeyboard()
+    );
+    return;
+  }
+
+  if (command === "schedule_help") {
+    await sendMessage(
+      chatId,
+      [
+        "🗓️ <b>Administrar horario desde Telegram</b>",
+        "",
+        "<b>Crear:</b>",
+        "<code>/crear_clase LUNES | 08:00 | 09:00 | Matemática | 3º | A | Aula 1</code>",
+        "",
+        "<b>Editar:</b>",
+        "<code>/editar_clase ID | MARTES | 09:00 | 10:00 | Lengua | 3º | A | Aula 1</code>",
+        "",
+        "<b>Eliminar:</b>",
+        "<code>/eliminar_clase ID</code>",
+      ].join("\n"),
+      true,
+      schoolScheduleKeyboard()
+    );
+    return;
+  }
+
+  if (command === "crear_evento" || command === "editar_evento") {
+    const result = await callAppsScript<BotResult>(
+      "botGuardarCalendarioTelegram",
+      {
+        chatId,
+        argumento: argument,
+        editar: command === "editar_evento",
+      }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Actividad guardada."),
+      true,
+      schoolCalendarKeyboard()
+    );
+    return;
+  }
+
+  if (command === "eliminar_evento") {
+    const result = await callAppsScript<BotResult>(
+      "botEliminarCalendarioTelegram",
+      { chatId, id: argument }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Actividad eliminada."),
+      true,
+      schoolCalendarKeyboard()
+    );
+    return;
+  }
+
+  if (command === "crear_clase" || command === "editar_clase") {
+    const result = await callAppsScript<BotResult>(
+      "botGuardarHorarioTelegram",
+      {
+        chatId,
+        argumento: argument,
+        editar: command === "editar_clase",
+      }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Clase guardada."),
+      true,
+      schoolScheduleKeyboard()
+    );
+    return;
+  }
+
+  if (command === "eliminar_clase") {
+    const result = await callAppsScript<BotResult>(
+      "botEliminarHorarioTelegram",
+      { chatId, id: argument }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Clase eliminada."),
+      true,
+      schoolScheduleKeyboard()
+    );
+    return;
+  }
 
   if (command === "vault_menu") {
     await sendMessage(
@@ -3349,10 +3538,18 @@ async function handleUpdate(update: TelegramUpdate) {
     { chatId, comando: command || "inicio" }
   );
 
+  const replyMarkup =
+    command.startsWith("calendario")
+      ? schoolCalendarKeyboard()
+      : command.startsWith("horario")
+        ? schoolScheduleKeyboard()
+        : undefined;
+
   await sendMessage(
     chatId,
     escapeHtml(result.texto || "No hay información disponible."),
-    result.vinculado !== false
+    result.vinculado !== false,
+    replyMarkup
   );
 }
 
