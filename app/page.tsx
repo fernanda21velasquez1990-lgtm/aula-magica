@@ -2,6 +2,8 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import AppLogo from "@/components/AppLogo";
+import ThemeToggle from "@/components/ThemeToggle";
 import { iniciarSesion, registrarMaestra } from "@/lib/apps-script-api";
 import { guardarSesion } from "@/lib/session";
 
@@ -20,12 +22,23 @@ export default function LoginPage() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (loading) return;
+
     setLoading(true);
     setMensaje("Procesando...");
+
     try {
       if (register) {
-        await registrarMaestra({ nombre, apellido, correo, contrasena, grado, seccion });
-        setMensaje("Cuenta creada correctamente. Ahora puedes iniciar sesión.");
+        await registrarMaestra({
+          nombre,
+          apellido,
+          correo,
+          contrasena,
+          grado,
+          seccion,
+        });
+        setMensaje(
+          "Cuenta creada correctamente. Ahora puedes iniciar sesión."
+        );
         setRegister(false);
         setContrasena("");
       } else {
@@ -34,7 +47,11 @@ export default function LoginPage() {
         router.push("/dashboard");
       }
     } catch (error) {
-      setMensaje(error instanceof Error ? error.message : "No fue posible completar la operación.");
+      setMensaje(
+        error instanceof Error
+          ? error.message
+          : "No fue posible completar la operación."
+      );
     } finally {
       setLoading(false);
     }
@@ -42,28 +59,105 @@ export default function LoginPage() {
 
   return (
     <main className="login-page">
+      <div className="login-theme-control">
+        <ThemeToggle />
+      </div>
+
       <section className="login">
         <div className="login-art">
-          <h1 className="title">Aula <span>Mágica</span> ✨</h1>
-          <p className="subtitle">Tu agenda escolar digital: alumnos, asistencia, notas, planificación, cumpleaños, reuniones y comunicación desde Telegram.</p>
-          <div className="login-emoji">👩‍🏫📚✏️</div>
+          <AppLogo href="" priority />
+          <span className="login-badge">✨ Gestión docente inteligente</span>
+          <h1 className="title">
+            Todo tu curso en un espacio <span>mágico</span>
+          </h1>
+          <p className="subtitle">
+            Alumnos, asistencia, notas, planificación, agenda, Telegram y
+            materiales digitales en una sola aplicación.
+          </p>
+          <div className="login-feature-cloud" aria-hidden="true">
+            <span>👩‍🏫</span>
+            <span>📚</span>
+            <span>✏️</span>
+            <span>🎂</span>
+            <span>📊</span>
+            <span>🧰</span>
+          </div>
         </div>
+
         <div className="login-form">
           <span className="chip">Acceso seguro por maestra</span>
           <h2>{register ? "Crear cuenta" : "Bienvenida"}</h2>
+          <p className="login-form-copy">
+            {register
+              ? "Crea tu espacio personal y comienza a organizar tu curso."
+              : "Ingresa para continuar con tu jornada docente."}
+          </p>
+
           <form onSubmit={submit}>
-            {register && <>
-              <input placeholder="Nombre" value={nombre} onChange={e => setNombre(e.target.value)} required />
-              <input placeholder="Apellido" value={apellido} onChange={e => setApellido(e.target.value)} required />
-              <input placeholder="Grado, por ejemplo: 1 grado" value={grado} onChange={e => setGrado(e.target.value)} />
-              <input placeholder="Sección, por ejemplo: A" value={seccion} onChange={e => setSeccion(e.target.value)} />
-            </>}
-            <input type="email" placeholder="Correo electrónico" value={correo} onChange={e => setCorreo(e.target.value)} required />
-            <input type="password" minLength={6} placeholder="Contraseña" value={contrasena} onChange={e => setContrasena(e.target.value)} required />
-            <button className="btn" type="submit" disabled={loading}>{loading ? "Procesando..." : register ? "Crear mi espacio" : "Entrar"}</button>
+            {register && (
+              <>
+                <input
+                  placeholder="Nombre"
+                  value={nombre}
+                  onChange={(event) => setNombre(event.target.value)}
+                  required
+                />
+                <input
+                  placeholder="Apellido"
+                  value={apellido}
+                  onChange={(event) => setApellido(event.target.value)}
+                  required
+                />
+                <input
+                  placeholder="Grado, por ejemplo: 1 grado"
+                  value={grado}
+                  onChange={(event) => setGrado(event.target.value)}
+                />
+                <input
+                  placeholder="Sección, por ejemplo: A"
+                  value={seccion}
+                  onChange={(event) => setSeccion(event.target.value)}
+                />
+              </>
+            )}
+
+            <input
+              type="email"
+              placeholder="Correo electrónico"
+              value={correo}
+              onChange={(event) => setCorreo(event.target.value)}
+              required
+            />
+            <input
+              type="password"
+              minLength={6}
+              placeholder="Contraseña"
+              value={contrasena}
+              onChange={(event) => setContrasena(event.target.value)}
+              required
+            />
+
+            <button className="btn" type="submit" disabled={loading}>
+              {loading
+                ? "Procesando..."
+                : register
+                  ? "Crear mi espacio"
+                  : "Entrar a Aula Mágica"}
+            </button>
           </form>
+
           {mensaje && <p className="notice">{mensaje}</p>}
-          <button className="btn secondary" type="button" onClick={() => { setRegister(v => !v); setMensaje(""); setContrasena(""); }} disabled={loading}>
+
+          <button
+            className="btn secondary"
+            type="button"
+            onClick={() => {
+              setRegister((value) => !value);
+              setMensaje("");
+              setContrasena("");
+            }}
+            disabled={loading}
+          >
             {register ? "Ya tengo una cuenta" : "Soy nueva, crear cuenta"}
           </button>
         </div>

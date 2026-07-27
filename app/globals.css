@@ -132,3 +132,170 @@
 .vault-whatsapp{display:block;padding:14px;border-radius:15px;background:#22b866;color:#fff;text-decoration:none;font-weight:950;box-shadow:0 10px 25px rgba(34,184,102,.28)}
 @media(max-width:1080px){.vault-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.vault-hero{grid-template-columns:1fr}.vault-hero-art{display:none}}
 @media(max-width:700px){.vault-page{padding:16px 12px 38px}.vault-hero{padding:24px 19px;border-radius:23px}.vault-hero h1{font-size:36px}.vault-grid{grid-template-columns:1fr}.vault-cover{height:220px}.vault-payment-data{grid-template-columns:1fr}.vault-card-footer{align-items:flex-end}.vault-card-footer strong{font-size:18px}}
+
+
+/* =========================================================
+   Aula Mágica 6.0 — base profesional, modo oscuro y accesibilidad
+   ========================================================= */
+:root{
+  --surface:#ffffff;
+  --surface-soft:#fff8fc;
+  --surface-muted:#f7f1f6;
+  --text:#3e3650;
+  --text-soft:#716779;
+  --border:#eadde6;
+  --brand-pink:#ff6eab;
+  --brand-blue:#69cde6;
+  --brand-purple:#9b7bf2;
+  --focus-ring:0 0 0 4px rgba(255,110,171,.18);
+  --transition-fast:160ms ease;
+  --transition-normal:260ms ease;
+}
+html{scroll-behavior:smooth}
+body{min-width:320px;transition:background-color var(--transition-normal),color var(--transition-normal)}
+button,input,select,textarea,a{transition:background-color var(--transition-fast),border-color var(--transition-fast),color var(--transition-fast),transform var(--transition-fast),box-shadow var(--transition-fast)}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:0;box-shadow:var(--focus-ring)}
+img{max-width:100%}
+::selection{background:#ffd1e5;color:#3a2c43}
+
+.app-logo-link{display:inline-flex;max-width:100%}
+.app-logo{display:inline-flex;align-items:center;gap:11px;min-width:0}
+.app-logo-mark{position:relative;display:grid;place-items:center;width:47px;height:47px;flex:0 0 auto;border-radius:17px;background:linear-gradient(145deg,#ff79b0,#8bdff2 62%,#b79cff);color:#fff;box-shadow:0 10px 24px rgba(157,104,203,.24)}
+.app-logo-sparkle{position:absolute;right:-4px;top:-5px;padding:2px;border-radius:50%;background:#fff;color:#ff5e9f}
+.app-logo-copy{display:grid;min-width:0;line-height:1.05}
+.app-logo-copy strong{font-size:22px;font-style:normal;white-space:nowrap}
+.app-logo-copy em{color:#f05298;font-style:normal}
+.app-logo-copy small{margin-top:5px;color:#7c7184;font-size:11px;font-weight:750;letter-spacing:.03em}
+.app-logo.compact .app-logo-mark{width:38px;height:38px;border-radius:13px}
+.app-logo.compact .app-logo-copy strong{font-size:18px}
+
+.sidebar{display:flex;flex-direction:column;gap:13px;overflow:hidden}
+.sidebar-brand{padding:1px 7px 5px}
+.nav{overflow-y:auto;padding-right:3px;scrollbar-width:thin}
+.nav a{position:relative;color:#554b61;will-change:transform}
+.nav a:before{content:"";position:absolute;left:4px;width:4px;height:0;border-radius:999px;background:linear-gradient(#ff6eab,#8b78ef);transition:height var(--transition-fast)}
+.nav a:hover{background:#fff0f7}
+.nav a.active{background:linear-gradient(135deg,#ffe6f1,#e9f8ff);color:#352f44;box-shadow:0 7px 18px rgba(77,55,92,.08)}
+.nav a.active:before{height:24px}
+.nav a.active svg{color:#e84e93}
+.sidebar-footer{display:grid;gap:9px;margin-top:auto;padding:11px 7px 3px}
+.sidebar-footer small{text-align:center;color:#8b808f;font-size:10px;font-weight:700}
+.theme-toggle{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;border:1px solid var(--border);border-radius:14px;padding:10px 12px;background:var(--surface);color:var(--text);font-weight:800}
+.theme-toggle:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(61,49,75,.09)}
+.theme-toggle.compact{width:42px;height:42px;padding:0;border-radius:50%}
+
+.section-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin:26px 0 15px}
+.section-heading h2{margin:9px 0 0;font-size:clamp(25px,3vw,34px)}
+.tool-card{position:relative;overflow:hidden;transition:transform var(--transition-normal),box-shadow var(--transition-normal),border-color var(--transition-normal)}
+.tool-card:before{content:"";position:absolute;inset:0 0 auto;height:5px;background:linear-gradient(90deg,#ff79b0,#77d8ed,#ab8df4);opacity:0;transition:opacity var(--transition-normal)}
+.tool-card:hover{transform:translateY(-5px);border-color:#ffd3e6;box-shadow:0 20px 42px rgba(71,51,84,.15)}
+.tool-card:hover:before{opacity:1}
+
+.login-theme-control{position:fixed;right:18px;top:18px;z-index:20}
+.login{border:1px solid rgba(255,255,255,.78);box-shadow:0 25px 75px rgba(58,42,69,.17)}
+.login-art{position:relative;overflow:hidden}
+.login-art:before,.login-art:after{content:"";position:absolute;border-radius:50%;filter:blur(1px)}
+.login-art:before{width:210px;height:210px;right:-65px;top:-70px;background:rgba(255,255,255,.45)}
+.login-art:after{width:150px;height:150px;left:-70px;bottom:-40px;background:rgba(255,255,255,.35)}
+.login-art>*{position:relative;z-index:1}
+.login-badge{display:inline-flex;align-self:flex-start;margin:28px 0 13px;padding:8px 12px;border-radius:999px;background:rgba(255,255,255,.7);font-size:12px;font-weight:900}
+.login-feature-cloud{display:flex;gap:11px;flex-wrap:wrap;margin-top:22px}
+.login-feature-cloud span{display:grid;place-items:center;width:48px;height:48px;border-radius:16px;background:rgba(255,255,255,.72);font-size:24px;box-shadow:0 8px 17px rgba(68,48,82,.08);animation:feature-float 3.8s ease-in-out infinite}
+.login-feature-cloud span:nth-child(2){animation-delay:.4s}.login-feature-cloud span:nth-child(3){animation-delay:.8s}.login-feature-cloud span:nth-child(4){animation-delay:1.2s}.login-feature-cloud span:nth-child(5){animation-delay:1.6s}.login-feature-cloud span:nth-child(6){animation-delay:2s}
+.login-form-copy{margin:-7px 0 19px;color:#756a7b;line-height:1.5}
+@keyframes feature-float{50%{transform:translateY(-6px) rotate(3deg)}}
+
+.app-boot{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;padding:20px;background:linear-gradient(145deg,#fff7fb,#ecf9ff 58%,#f3edff);animation:boot-exit .28s ease .68s forwards}
+.app-boot-card,.route-loading section{display:grid;place-items:center;gap:20px;padding:32px 36px;border:1px solid rgba(255,255,255,.92);border-radius:28px;background:rgba(255,255,255,.86);box-shadow:0 25px 70px rgba(66,48,79,.15);backdrop-filter:blur(14px);text-align:center}
+.app-boot-card p,.route-loading p{margin:0;color:#766c7e;font-weight:800}
+@keyframes boot-exit{to{opacity:0;visibility:hidden}}
+.magic-loader{display:flex;align-items:center;justify-content:center;gap:7px;height:22px}
+.magic-loader span{width:9px;height:9px;border-radius:50%;background:#ff6eab;animation:magic-bounce .8s ease-in-out infinite}
+.magic-loader span:nth-child(2){background:#63cce6;animation-delay:.12s}
+.magic-loader span:nth-child(3){background:#9b7bf2;animation-delay:.24s}
+@keyframes magic-bounce{50%{transform:translateY(-8px);opacity:.65}}
+.route-loading{min-height:100vh;display:grid;place-items:center;padding:20px}
+.dashboard-loading{display:grid;place-items:center;gap:16px;min-height:55vh;text-align:center}
+.dashboard-loading-orb{display:grid;place-items:center;width:82px;height:82px;border-radius:28px;background:linear-gradient(145deg,#ffe4f0,#e4f7ff);font-size:39px;animation:feature-float 2.5s ease-in-out infinite}
+.dashboard-loading-lines{display:grid;gap:7px;width:min(310px,75vw)}
+.dashboard-loading-lines span{height:10px;border-radius:999px;background:linear-gradient(90deg,#f2e8ef,#fff,#f2e8ef);background-size:200% 100%;animation:loading-shine 1.1s linear infinite}
+.dashboard-loading-lines span:nth-child(2){width:82%;justify-self:center}.dashboard-loading-lines span:nth-child(3){width:63%;justify-self:center}
+@keyframes loading-shine{to{background-position:-200% 0}}
+
+[data-theme="dark"]{
+  --ink:#f2eaf5;
+  --paper:#201a29;
+  --line:rgba(137,199,216,.12);
+  --shadow:0 14px 36px rgba(0,0,0,.31);
+  --surface:#241e2d;
+  --surface-soft:#1d1825;
+  --surface-muted:#2d2535;
+  --text:#f3ebf5;
+  --text-soft:#b9adbf;
+  --border:#403548;
+  color-scheme:dark;
+}
+[data-theme="dark"] body{color:var(--text);background-color:#17131f;background-image:linear-gradient(rgba(117,196,216,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(117,196,216,.08) 1px,transparent 1px)}
+[data-theme="dark"] .sidebar{background:rgba(30,25,38,.94);border-color:#493343}
+[data-theme="dark"] .app-logo-copy small,[data-theme="dark"] .sidebar-footer small{color:#aa9caf}
+[data-theme="dark"] .nav a{color:#c9bdce}
+[data-theme="dark"] .nav a:hover{background:#342839}
+[data-theme="dark"] .nav a.active{background:linear-gradient(135deg,#422b3a,#273c46);color:#fff}
+[data-theme="dark"] .theme-toggle,[data-theme="dark"] .card,[data-theme="dark"] .summary-card,[data-theme="dark"] .tool-card,[data-theme="dark"] .state-card,[data-theme="dark"] .students-modal,[data-theme="dark"] .attendance-monthly-card,[data-theme="dark"] .attendance-absence-card,[data-theme="dark"] .vault-card,[data-theme="dark"] .settings-card,[data-theme="dark"] .reports-card,[data-theme="dark"] .telegram-card{background:#241e2d!important;color:#f3ebf5!important;border-color:#403548!important}
+[data-theme="dark"] .hero,[data-theme="dark"] .students-header,[data-theme="dark"] .attendance-header,[data-theme="dark"] .vault-hero,[data-theme="dark"] .login{background:linear-gradient(135deg,#292130,#252737 56%,#1d3139)!important;border-color:#3f3548!important}
+[data-theme="dark"] .login-art{background:linear-gradient(145deg,#3c2633,#213c46)!important}
+[data-theme="dark"] .login-form{background:#241e2d}
+[data-theme="dark"] input,[data-theme="dark"] select,[data-theme="dark"] textarea,[data-theme="dark"] .vault-search,[data-theme="dark"] .vault-controls,[data-theme="dark"] .attendance-tabs{background:#1c1723!important;color:#f3ebf5!important;border-color:#423649!important}
+[data-theme="dark"] input::placeholder,[data-theme="dark"] textarea::placeholder{color:#8f8295}
+[data-theme="dark"] .tool-card p,[data-theme="dark"] .summary-card p,[data-theme="dark"] .login-form-copy,[data-theme="dark"] .students-header p,[data-theme="dark"] .vault-hero p,[data-theme="dark"] .vault-card p{color:#b5a9bb!important}
+[data-theme="dark"] .chip,[data-theme="dark"] .students-chip,[data-theme="dark"] .vault-kicker{background:#3b2c3a!important;color:#ffd8e9!important}
+[data-theme="dark"] .notice,[data-theme="dark"] .students-message,[data-theme="dark"] .attendance-message,[data-theme="dark"] .vault-message{background:#423718!important;color:#f8df8d!important;border-color:#665520!important}
+[data-theme="dark"] .app-boot,[data-theme="dark"] .route-loading{background:linear-gradient(145deg,#17131f,#202635 58%,#281e36)}
+[data-theme="dark"] .app-boot-card,[data-theme="dark"] .route-loading section{background:rgba(36,30,45,.9);border-color:#493d53}
+[data-theme="dark"] .table-wrap,[data-theme="dark"] table,[data-theme="dark"] th,[data-theme="dark"] td{background:#241e2d;color:#f3ebf5;border-color:#403548}
+[data-theme="dark"] th{background:#35283a}
+[data-theme="dark"] .vault-payment-modal{background:linear-gradient(150deg,#28202f,#201923);color:#f3ebf5}
+[data-theme="dark"] .vault-payment-data div{background:#1b1621;border-color:#403548}
+[data-theme="dark"] .students-modal-backdrop,[data-theme="dark"] .vault-modal-backdrop{background:rgba(5,4,8,.76)}
+
+@media(max-width:900px){
+  .sidebar{left:8px;right:8px;bottom:8px;padding:7px 8px 8px;border-radius:23px;background:rgba(255,255,255,.96);box-shadow:0 15px 45px rgba(53,47,68,.2)}
+  .sidebar-brand,.sidebar-footer{display:none}
+  .nav{display:flex;gap:4px;overflow-x:auto;padding:0 1px 2px;scroll-snap-type:x proximity;scrollbar-width:none}
+  .nav::-webkit-scrollbar{display:none}
+  .nav a{display:grid;justify-items:center;gap:4px;min-width:74px;padding:9px 8px 7px;border-radius:15px;font-size:10px;scroll-snap-align:center}
+  .nav a span{display:block;max-width:68px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .nav a:before{display:none}
+  .nav a.active{transform:none}
+  .content{padding-bottom:112px}
+}
+@media(max-width:520px){
+  .login-theme-control{right:10px;top:10px}
+  .login-theme-control .theme-toggle span{display:none}
+  .login-theme-control .theme-toggle{width:44px;height:44px;padding:0;border-radius:50%}
+  .app-boot-card{padding:27px 24px}
+  .summary-grid{grid-template-columns:1fr}
+}
+@media(prefers-reduced-motion:reduce){
+  *,*:before,*:after{scroll-behavior:auto!important;animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
+}
+
+
+/* =========================================================
+   Aula Mágica 6.0.1 — identidad visual con logo oficial
+   ========================================================= */
+.sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+.app-logo-link{display:inline-flex;align-items:center;justify-content:center;max-width:100%;border-radius:22px}
+.app-logo{display:inline-grid;place-items:center;min-width:0}
+.app-logo-picture{display:block;width:220px;height:auto;object-fit:contain;filter:drop-shadow(0 11px 15px rgba(53,35,72,.16));transition:transform var(--transition-normal),filter var(--transition-normal)}
+.app-logo-link:hover .app-logo-picture{transform:translateY(-2px) scale(1.015);filter:drop-shadow(0 15px 20px rgba(53,35,72,.22))}
+.app-logo.compact .app-logo-picture{width:130px}
+.sidebar-brand{display:grid;place-items:center;min-height:96px;padding:0 3px 5px}
+.sidebar-brand .app-logo-picture{width:176px;max-height:102px}
+.login-art .app-logo{align-self:flex-start}
+.login-art .app-logo-picture{width:min(310px,88%);max-height:245px}
+.app-boot-card .app-logo-picture,.route-loading .app-logo-picture{width:245px;max-height:205px}
+.app-boot-card{overflow:hidden}
+[data-theme="dark"] .app-logo-picture{filter:drop-shadow(0 13px 18px rgba(0,0,0,.36))}
+@media(max-width:900px){.sidebar-brand{display:none}.login-art .app-logo-picture{width:250px}}
+@media(max-width:520px){.app-boot-card .app-logo-picture,.route-loading .app-logo-picture{width:205px}.app-logo-picture{width:205px}}
