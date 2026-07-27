@@ -275,6 +275,44 @@ function keyboardForMeetingStep(step?: string) {
   return meetingCancelKeyboard();
 }
 
+
+function plansMenuKeyboard() {
+  return {
+    inline_keyboard: [
+      [
+        { text: "📋 Ver próximas", callback_data: "planes" },
+        { text: "➕ Crear planificación", callback_data: "plan_create" },
+      ],
+      [{ text: "⬅️ Volver al menú", callback_data: "inicio" }],
+    ],
+  };
+}
+
+function planCancelKeyboard() {
+  return {
+    inline_keyboard: [
+      [{ text: "❌ Cancelar", callback_data: "plan_cancel" }],
+    ],
+  };
+}
+
+function planConfirmKeyboard() {
+  return {
+    inline_keyboard: [
+      [
+        { text: "✅ Guardar planificación", callback_data: "plan_confirm" },
+        { text: "❌ Cancelar", callback_data: "plan_cancel" },
+      ],
+    ],
+  };
+}
+
+function keyboardForPlanStep(step?: string) {
+  return step === "CONFIRMAR"
+    ? planConfirmKeyboard()
+    : planCancelKeyboard();
+}
+
 function mainMenuKeyboard(linked = true) {
   const rows: InlineButton[][] = linked
     ? [
@@ -287,7 +325,7 @@ function mainMenuKeyboard(linked = true) {
           { text: "📝 Notas", callback_data: "notas" },
         ],
         [
-          { text: "📚 Planes", callback_data: "planes" },
+          { text: "📚 Planes", callback_data: "plans_menu" },
           { text: "🎂 Cumpleaños", callback_data: "cumpleanos" },
         ],
         [
@@ -352,6 +390,78 @@ async function handleUpdate(update: TelegramUpdate) {
   await answerCallback(callback?.id);
 
   const { command, argument } = commandFromText(rawText);
+
+  if (command === "plans_menu") {
+    await sendMessage(
+      chatId,
+      "📚 <b>Planificaciones</b>\n\nConsulta las próximas o crea una nueva.",
+      true,
+      plansMenuKeyboard()
+    );
+    return;
+  }
+
+  if (command === "plan_create") {
+    const result = await callAppsScript<BotResult>(
+      "botIniciarPlanificacionTelegram",
+      { chatId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Escribe el título."),
+      true,
+      keyboardForPlanStep(result.paso)
+    );
+    return;
+  }
+
+  if (command === "plan_confirm") {
+    const result = await callAppsScript<BotResult>(
+      "botConfirmarPlanificacionTelegram",
+      { chatId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Planificación guardada."),
+      true
+    );
+    return;
+  }
+
+  if (command === "plan_cancel") {
+    const result = await callAppsScript<BotResult>(
+      "botCancelarFlujoPlanificacionTelegram",
+      { chatId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Operación cancelada."),
+      true
+    );
+    return;
+  }
+
+  if (!callback && !rawText.startsWith("/")) {
+    const planFlow = await callAppsScript<BotResult>(
+      "botProcesarFlujoPlanificacionTelegram",
+      { chatId, texto: rawText }
+    );
+
+    if (planFlow.activo || planFlow.cancelado) {
+      await sendMessage(
+        chatId,
+        escapeHtml(planFlow.texto || "Continúa con el siguiente paso."),
+        true,
+        planFlow.activo
+          ? keyboardForPlanStep(planFlow.paso)
+          : mainMenuKeyboard(true)
+      );
+      return;
+    }
+  }
 
   if (command === "meetings_menu") {
     await sendMessage(
