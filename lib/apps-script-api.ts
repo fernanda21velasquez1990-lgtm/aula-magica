@@ -881,19 +881,21 @@ export async function guardarExpedienteAlumno(
 
 
 export type PlanPlataforma = {
-  idPlan: string; nombre: string; duracionDias: number; precio: number;
-  moneda: string; estado: string; descripcion: string;
+  idPlan: string; nombre: string; duracionDias: number;
+  precioUsd: number; precioVes: number;
+  estado: string; descripcion: string;
 };
 export type LicenciaAdministrador = {
   idLicencia: string; idMaestra: string; idPlan: string; plan: string;
-  precio: number; fechaInicio: string; fechaVencimiento: string;
+  precioUsd: number; precioVes: number;
+  fechaInicio: string; fechaVencimiento: string;
   estado: string; diasRestantes: number; nombreMaestra: string; correo: string;
 };
 export type PanelSuscripciones = {
   planes: PlanPlataforma[];
   licencias: LicenciaAdministrador[];
-  pagos: Array<{idPago:string;idMaestra:string;monto:number;fechaPago:string;estado:string}>;
-  resumen:{total:number;activas:number;porVencer:number;vencidas:number;suspendidas:number;ingresos:number};
+  pagos: Array<{idPago:string;idMaestra:string;monto:number;moneda:string;fechaPago:string;estado:string}>;
+  resumen:{total:number;activas:number;porVencer:number;vencidas:number;suspendidas:number;ingresosUsd:number;ingresosVes:number};
 };
 export async function adminObtenerSuscripciones(token:string){
   return llamarAppsScript<PanelSuscripciones>({action:"adminObtenerSuscripciones",token});
@@ -905,7 +907,7 @@ export async function adminCambiarEstadoSuscripcion(token:string,datos:{idLicenc
   return llamarAppsScript<{actualizado:boolean}>({action:"adminCambiarEstadoSuscripcion",token,data:datos});
 }
 export async function adminRegistrarPagoSuscripcion(token:string,datos:{
-  idMaestra:string;idLicencia:string;idPlan:string;monto:number;metodo?:string;
+  idMaestra:string;idLicencia:string;idPlan:string;monto:number;moneda:string;metodo?:string;
   referencia?:string;fechaPago?:string;notas?:string;
 }){
   return llamarAppsScript<{guardado:boolean;idPago:string}>({action:"adminRegistrarPagoSuscripcion",token,data:datos});

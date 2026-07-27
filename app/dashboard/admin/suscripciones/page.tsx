@@ -8,8 +8,9 @@ import {
 } from "@/lib/apps-script-api";
 import { obtenerMaestra, obtenerToken } from "@/lib/session";
 
-const VACIO:PanelSuscripciones={planes:[],licencias:[],pagos:[],resumen:{total:0,activas:0,porVencer:0,vencidas:0,suspendidas:0,ingresos:0}};
-const dinero=(v:number)=>new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",maximumFractionDigits:0}).format(v||0);
+const VACIO:PanelSuscripciones={planes:[],licencias:[],pagos:[],resumen:{total:0,activas:0,porVencer:0,vencidas:0,suspendidas:0,ingresosUsd:0,ingresosVes:0}};
+const dineroUsd=(v:number)=>new Intl.NumberFormat("en-US",{style:"currency",currency:"USD",maximumFractionDigits:2}).format(v||0);
+const dineroVes=(v:number)=>new Intl.NumberFormat("es-VE",{style:"currency",currency:"VES",maximumFractionDigits:2}).format(v||0);
 const hoy=()=>new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
 
 export default function SuscripcionesPage(){
@@ -17,7 +18,7 @@ export default function SuscripcionesPage(){
   const [panel,setPanel]=useState(VACIO),[seleccionada,setSeleccionada]=useState<LicenciaAdministrador|null>(null);
   const [buscar,setBuscar]=useState(""),[filtro,setFiltro]=useState("TODAS"),[plan,setPlan]=useState("");
   const [mensaje,setMensaje]=useState(""),[cargando,setCargando]=useState(false);
-  const [pago,setPago]=useState({monto:0,metodo:"TRANSFERENCIA",referencia:"",fechaPago:hoy(),notas:""});
+  const [pago,setPago]=useState({monto:0,moneda:"USD",metodo:"TRANSFERENCIA",referencia:"",fechaPago:hoy(),notas:""});
   const admin=Boolean(usuario?.esAdmin)||String(usuario?.correo||"").toLowerCase()==="wilmarvelasquez1783@gmail.com";
 
   async function cargar(){
@@ -43,7 +44,7 @@ export default function SuscripcionesPage(){
   }
   async function registrar(event:FormEvent){event.preventDefault();if(!seleccionada)return;const token=obtenerToken();if(!token)return;
     await adminRegistrarPagoSuscripcion(token,{...pago,idMaestra:seleccionada.idMaestra,idLicencia:seleccionada.idLicencia,idPlan:plan||seleccionada.idPlan});
-    setMensaje("✅ Pago registrado.");setPago({monto:0,metodo:"TRANSFERENCIA",referencia:"",fechaPago:hoy(),notas:""});await cargar();
+    setMensaje("✅ Pago registrado.");setPago({monto:0,moneda:"USD",metodo:"TRANSFERENCIA",referencia:"",fechaPago:hoy(),notas:""});await cargar();
   }
 
   if(!admin)return <div className="state-card">🔐 Verificando acceso...</div>;
@@ -54,7 +55,8 @@ export default function SuscripcionesPage(){
       <article><span>✅</span><strong>{panel.resumen.activas}</strong><small>Activas</small></article>
       <article><span>⏳</span><strong>{panel.resumen.porVencer}</strong><small>Por vencer</small></article>
       <article><span>🔒</span><strong>{panel.resumen.vencidas+panel.resumen.suspendidas}</strong><small>Sin acceso</small></article>
-      <article className="money"><span>💰</span><strong>{dinero(panel.resumen.ingresos)}</strong><small>Ingresos</small></article>
+      <article className="money"><span>💵</span><strong>{dineroUsd(panel.resumen.ingresosUsd)}</strong><small>Ingresos USD</small></article>
+      <article className="money"><span>🇻🇪</span><strong>{dineroVes(panel.resumen.ingresosVes)}</strong><small>Ingresos VES</small></article>
     </section>
     {mensaje&&<div className="school-message">{mensaje}</div>}
     <section className="subscription-filters">
@@ -72,10 +74,16 @@ export default function SuscripcionesPage(){
     </div></section>
     {seleccionada&&<div className="subscription-modal-backdrop"><section className="subscription-modal">
       <header><div><h2>{seleccionada.nombreMaestra}</h2><p>{seleccionada.correo}</p></div><button onClick={()=>setSeleccionada(null)}>×</button></header>
-      <label>Plan<select value={plan} onChange={e=>setPlan(e.target.value)}>{panel.planes.map(p=><option key={p.idPlan} value={p.idPlan}>{p.nombre} · {p.duracionDias} días · {dinero(p.precio)}</option>)}</select></label>
+      <label>Plan<select value={plan} onChange={e=>setPlan(e.target.value)}>{panel.planes.map(p=><option key={p.idPlan} value={p.idPlan}>{p.nombre} · {p.duracionDias} días · {dineroUsd(p.precioUsd)} / {dineroVes(p.precioVes)}</option>)}</select></label>
+      <div className="dual-price-note">
+        <b>Precios configurados</b>
+        <span>USD: {dineroUsd(panel.planes.find(p=>p.idPlan===plan)?.precioUsd||0)}</span>
+        <span>VES: {dineroVes(panel.planes.find(p=>p.idPlan===plan)?.precioVes||0)}</span>
+      </div>
       <div className="subscription-actions"><button className="primary" onClick={()=>void activar()}>✅ Activar o renovar</button><button onClick={()=>void estado("SUSPENDIDA")}>⏸️ Suspender</button><button onClick={()=>void estado("BLOQUEADA")}>🔒 Bloquear</button><button onClick={()=>void estado("ACTIVA")}>🔓 Reactivar</button></div>
       <form className="payment-form" onSubmit={registrar}><h3>Registrar pago</h3><div>
-        <label>Monto<input type="number" min="0" required value={pago.monto} onChange={e=>setPago({...pago,monto:Number(e.target.value)})}/></label>
+        <label>Moneda<select value={pago.moneda} onChange={e=>setPago({...pago,moneda:e.target.value})}><option value="USD">Dólares (USD)</option><option value="VES">Bolívares (VES)</option></select></label>
+        <label>Monto<input type="number" min="0" step="0.01" required value={pago.monto} onChange={e=>setPago({...pago,monto:Number(e.target.value)})}/></label>
         <label>Método<select value={pago.metodo} onChange={e=>setPago({...pago,metodo:e.target.value})}><option>TRANSFERENCIA</option><option>EFECTIVO</option><option>NEQUI</option><option>DAVIPLATA</option></select></label>
         <label>Referencia<input value={pago.referencia} onChange={e=>setPago({...pago,referencia:e.target.value})}/></label>
         <label>Fecha<input type="date" value={pago.fechaPago} onChange={e=>setPago({...pago,fechaPago:e.target.value})}/></label>

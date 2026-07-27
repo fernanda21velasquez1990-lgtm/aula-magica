@@ -18,7 +18,7 @@ const SHEETS = {
   CALENDARIO_ESCOLAR: ['ID_CALENDARIO','ID_MAESTRA','TITULO','TIPO','FECHA_INICIO','FECHA_FIN','HORA','LUGAR','DESCRIPCION','RECORDATORIO','ESTADO','FECHA_REGISTRO'],
   HORARIO_SEMANAL: ['ID_HORARIO','ID_MAESTRA','DIA','HORA_INICIO','HORA_FIN','ASIGNATURA','GRADO','SECCION','AULA','COLOR','NOTAS','ESTADO'],
   EXPEDIENTES_ALUMNOS: ['ID_EXPEDIENTE','ID_MAESTRA','ID_ALUMNO','FOTO','FIRMA_MAESTRA','FIRMA_REPRESENTANTE','ALERGIAS','CONDICIONES_MEDICAS','CONTACTO_EMERGENCIA','TELEFONO_EMERGENCIA','AUTORIZACIONES','NOTAS_PRIVADAS','FECHA_ACTUALIZACION'],
-  PLANES_PLATAFORMA: ['ID_PLAN','NOMBRE','DURACION_DIAS','PRECIO','MONEDA','ESTADO','DESCRIPCION'],
+  PLANES_PLATAFORMA: ['ID_PLAN','NOMBRE','DURACION_DIAS','PRECIO_USD','PRECIO_VES','ESTADO','DESCRIPCION'],
   LICENCIAS: ['ID_LICENCIA','ID_MAESTRA','ID_PLAN','FECHA_INICIO','FECHA_VENCIMIENTO','ESTADO','FECHA_ACTUALIZACION'],
   PAGOS_SUSCRIPCIONES: ['ID_PAGO','ID_MAESTRA','ID_LICENCIA','ID_PLAN','MONTO','MONEDA','METODO','REFERENCIA','ESTADO','FECHA_PAGO','NOTAS'],
   AUDITORIA: ['ID','ID_MAESTRA','ACCION','MODULO','DETALLE','FECHA','IP']
@@ -79,7 +79,7 @@ function crearEstructuraInicial() {
   );
 
   if(filaVersion){
-    config.getRange(filaVersion.__fila,2).setValue('10.0.0');
+    config.getRange(filaVersion.__fila,2).setValue('10.0.1');
   }
 
   SpreadsheetApp.getUi().alert(
@@ -94,7 +94,7 @@ function doGet() {
     ok: true,
     aplicacion: APP_NAME,
     estado: 'API funcionando',
-    version: '10.0.0'
+    version: '10.0.1'
   });
 }
 function doPost(e) {
@@ -1086,12 +1086,20 @@ function diasRestantesSuscripcion(fecha){
 
 function asegurarPlanesPlataforma(){
   const hoja=obtenerHoja('PLANES_PLATAFORMA');
+  const encabezados=[
+    'ID_PLAN','NOMBRE','DURACION_DIAS','PRECIO_USD',
+    'PRECIO_VES','ESTADO','DESCRIPCION'
+  ];
+
+  hoja.getRange(1,1,1,encabezados.length).setValues([encabezados]);
+
   if(hoja.getLastRow()>1)return;
+
   hoja.getRange(2,1,4,7).setValues([
-    ['PLAN_MENSUAL','Mensual',30,30000,'COP','ACTIVO','Acceso por 30 días'],
-    ['PLAN_TRIMESTRAL','Trimestral',90,80000,'COP','ACTIVO','Acceso por 90 días'],
-    ['PLAN_ANUAL','Anual',365,280000,'COP','ACTIVO','Acceso por 365 días'],
-    ['PLAN_PRUEBA','Prueba',30,0,'COP','ACTIVO','Prueba inicial']
+    ['PLAN_MENSUAL','Mensual',30,10,0,'ACTIVO','Acceso por 30 días'],
+    ['PLAN_TRIMESTRAL','Trimestral',90,25,0,'ACTIVO','Acceso por 90 días'],
+    ['PLAN_ANUAL','Anual',365,80,0,'ACTIVO','Acceso por 365 días'],
+    ['PLAN_PRUEBA','Prueba',30,0,0,'ACTIVO','Prueba inicial']
   ]);
 }
 
@@ -1126,7 +1134,8 @@ function licenciaPublica(r){
     idMaestra:String(r.ID_MAESTRA||''),
     idPlan:String(r.ID_PLAN||''),
     plan:String(plan.NOMBRE||r.ID_PLAN||''),
-    precio:Number(plan.PRECIO||0),
+    precioUsd:Number(plan.PRECIO_USD||0),
+    precioVes:Number(plan.PRECIO_VES||0),
     fechaInicio:fechaSuscripcion(r.FECHA_INICIO),
     fechaVencimiento:fechaSuscripcion(r.FECHA_VENCIMIENTO),
     estado:estado,
@@ -1152,8 +1161,8 @@ function adminObtenerSuscripciones(token){
     idPlan:String(r.ID_PLAN||''),
     nombre:String(r.NOMBRE||''),
     duracionDias:Number(r.DURACION_DIAS||0),
-    precio:Number(r.PRECIO||0),
-    moneda:String(r.MONEDA||'COP'),
+    precioUsd:Number(r.PRECIO_USD||0),
+    precioVes:Number(r.PRECIO_VES||0),
     estado:String(r.ESTADO||'ACTIVO'),
     descripcion:String(r.DESCRIPCION||'')
   }));
@@ -1162,6 +1171,7 @@ function adminObtenerSuscripciones(token){
     idPago:String(r.ID_PAGO||''),
     idMaestra:String(r.ID_MAESTRA||''),
     monto:Number(r.MONTO||0),
+    moneda:String(r.MONEDA||'USD').toUpperCase(),
     fechaPago:fechaSuscripcion(r.FECHA_PAGO),
     estado:String(r.ESTADO||'CONFIRMADO')
   }));
@@ -1176,7 +1186,12 @@ function adminObtenerSuscripciones(token){
       porVencer:licencias.filter(x=>x.estado==='POR_VENCER').length,
       vencidas:licencias.filter(x=>x.estado==='VENCIDA').length,
       suspendidas:licencias.filter(x=>['SUSPENDIDA','BLOQUEADA'].includes(x.estado)).length,
-      ingresos:pagos.filter(x=>x.estado==='CONFIRMADO').reduce((s,x)=>s+x.monto,0)
+      ingresosUsd:pagos
+        .filter(x=>x.estado==='CONFIRMADO'&&x.moneda==='USD')
+        .reduce((s,x)=>s+x.monto,0),
+      ingresosVes:pagos
+        .filter(x=>x.estado==='CONFIRMADO'&&x.moneda==='VES')
+        .reduce((s,x)=>s+x.monto,0)
     }
   };
 }
@@ -1228,7 +1243,9 @@ function adminRegistrarPagoSuscripcion(token,datos){
   const id=generarId('PAG');
   obtenerHoja('PAGOS_SUSCRIPCIONES').appendRow([
     id,String(datos.idMaestra),String(datos.idLicencia),String(datos.idPlan),
-    Number(datos.monto||0),'COP',limpiarTexto(datos.metodo||''),
+    Number(datos.monto||0),
+    String(datos.moneda||'USD').toUpperCase(),
+    limpiarTexto(datos.metodo||''),
     limpiarTexto(datos.referencia||''),'CONFIRMADO',
     fechaSuscripcion(datos.fechaPago)||fechaSuscripcion(new Date()),
     limpiarTexto(datos.notas||'')
