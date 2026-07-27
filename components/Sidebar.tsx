@@ -39,6 +39,7 @@ const items = [
 export default function Sidebar() {
   const pathname = usePathname();
   const maestra = obtenerMaestra();
+
   const correoAdministrador = "wilmarvelasquez1783@gmail.com";
   const esAdministrador =
     Boolean(maestra?.esAdmin) ||
@@ -48,7 +49,7 @@ export default function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="sidebar-brand">
-        <AppLogo />
+        <AppLogo compact priority />
       </div>
 
       <nav className="nav" aria-label="Navegación principal">
@@ -71,6 +72,24 @@ export default function Sidebar() {
             </Link>
           );
         })}
+
+        {esAdministrador && (
+          <Link
+            href="/dashboard/admin"
+            className={
+              pathname.startsWith("/dashboard/admin")
+                ? "active admin-link"
+                : "admin-link"
+            }
+            aria-current={
+              pathname.startsWith("/dashboard/admin") ? "page" : undefined
+            }
+            title="Panel Administrador"
+          >
+            <ShieldCheck size={21} aria-hidden="true" />
+            <span>Administrador</span>
+          </Link>
+        )}
       </nav>
 
       <div className="sidebar-footer">
