@@ -530,6 +530,23 @@ function keyboardForBirthdayStep(step?: string, hasDate = false) {
   return birthdayCancelKeyboard();
 }
 
+
+function reportsMenuKeyboard() {
+  return {
+    inline_keyboard: [
+      [
+        { text: "📊 General", callback_data: "report:GENERAL" },
+        { text: "✅ Asistencia", callback_data: "report:ASISTENCIA" },
+      ],
+      [
+        { text: "📝 Calificaciones", callback_data: "report:CALIFICACIONES" },
+        { text: "📌 Pendientes", callback_data: "report:PENDIENTES" },
+      ],
+      [{ text: "⬅️ Volver al menú", callback_data: "inicio" }],
+    ],
+  };
+}
+
 function mainMenuKeyboard(linked = true) {
   const rows: InlineButton[][] = linked
     ? [
@@ -549,7 +566,8 @@ function mainMenuKeyboard(linked = true) {
           { text: "🤝 Reuniones", callback_data: "meetings_menu" },
           { text: "📅 Agenda", callback_data: "agenda_menu" },
         ],
-        [{ text: "❓ Ayuda", callback_data: "ayuda" }],
+        [{ text: "📊 Reportes", callback_data: "reports_menu" }],
+      [{ text: "❓ Ayuda", callback_data: "ayuda" }],
       ]
     : [[{ text: "❓ Cómo vincular", callback_data: "ayuda_vincular" }]];
 
@@ -607,6 +625,33 @@ async function handleUpdate(update: TelegramUpdate) {
   await answerCallback(callback?.id);
 
   const { command, argument } = commandFromText(rawText);
+
+  if (command === "reports_menu") {
+    await sendMessage(
+      chatId,
+      "📊 <b>Reportes</b>\n\nSelecciona el reporte que deseas consultar.",
+      true,
+      reportsMenuKeyboard()
+    );
+    return;
+  }
+
+  if (command.startsWith("report:")) {
+    const tipo = rawText.split(":")[1] || "";
+
+    const result = await callAppsScript<BotResult>(
+      "botGenerarReporteTelegram",
+      { chatId, tipo }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "No hay información disponible."),
+      true,
+      reportsMenuKeyboard()
+    );
+    return;
+  }
 
   if (command === "birthdays_menu") {
     await sendMessage(
