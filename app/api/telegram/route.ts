@@ -743,7 +743,14 @@ function agendaManageListKeyboard(
 }
 
 function agendaItemKeyboard(eventId: string, state: string) {
-  const rows: Array<Array<{ text: string; callback_data: string }>> = [];
+  const rows: Array<Array<{ text: string; callback_data: string }>> = [
+    [
+      {
+        text: "✏️ Editar evento",
+        callback_data: `agenda_edit:${eventId}`,
+      },
+    ],
+  ];
 
   if (state !== "COMPLETADO") {
     rows.push([
@@ -1211,6 +1218,32 @@ function attendanceDeleteKeyboard(recordId: string) {
           callback_data: `attendance_item:${recordId}`,
         },
       ],
+    ],
+  };
+}
+
+
+function agendaEditKeyboard(step?: string) {
+  if (step === "CONFIRMAR") {
+    return {
+      inline_keyboard: [
+        [
+          {
+            text: "✅ Guardar cambios",
+            callback_data: "agenda_edit_confirm",
+          },
+          {
+            text: "❌ Cancelar",
+            callback_data: "agenda_edit_cancel",
+          },
+        ],
+      ],
+    };
+  }
+
+  return {
+    inline_keyboard: [
+      [{ text: "❌ Cancelar", callback_data: "agenda_edit_cancel" }],
     ],
   };
 }
@@ -2413,6 +2446,73 @@ async function handleUpdate(update: TelegramUpdate) {
       )
     );
     return;
+  }
+
+  if (command.startsWith("agenda_edit:")) {
+    const eventId = rawText.split(":")[1] || "";
+
+    const result = await callAppsScript<BotResult>(
+      "botIniciarEdicionEventoTelegram",
+      { chatId, idEvento: eventId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Escribe el nuevo título."),
+      true,
+      agendaEditKeyboard(result.paso)
+    );
+    return;
+  }
+
+  if (command === "agenda_edit_confirm") {
+    const result = await callAppsScript<BotResult>(
+      "botConfirmarEdicionEventoTelegram",
+      { chatId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Evento actualizado."),
+      true,
+      agendaMenuKeyboard()
+    );
+    return;
+  }
+
+  if (command === "agenda_edit_cancel") {
+    const result = await callAppsScript<BotResult>(
+      "botCancelarEdicionEventoTelegram",
+      { chatId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Operación cancelada."),
+      true
+    );
+    return;
+  }
+
+  if (!callback && !rawText.startsWith("/")) {
+    const agendaEditFlow = await callAppsScript<BotResult>(
+      "botProcesarEdicionEventoTelegram",
+      { chatId, texto: rawText }
+    );
+
+    if (agendaEditFlow.activo || agendaEditFlow.cancelado) {
+      await sendMessage(
+        chatId,
+        escapeHtml(
+          agendaEditFlow.texto || "Continúa con el siguiente paso."
+        ),
+        true,
+        agendaEditFlow.activo
+          ? agendaEditKeyboard(agendaEditFlow.paso)
+          : mainMenuKeyboard(true)
+      );
+      return;
+    }
   }
 
   if (command.startsWith("agenda_state:")) {
