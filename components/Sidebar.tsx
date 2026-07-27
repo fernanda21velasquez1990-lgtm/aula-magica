@@ -16,6 +16,7 @@ import {
   Send,
   Settings,
   ShieldCheck,
+  BadgeDollarSign,
   Users,
 } from "lucide-react";
 import Link from "next/link";
@@ -96,11 +97,21 @@ export default function Sidebar() {
             <span>Administrador</span>
           </Link>
         )}
+        {esAdministrador && (
+          <Link
+            href="/dashboard/admin/suscripciones"
+            className={pathname.startsWith("/dashboard/admin/suscripciones") ? "active admin-link" : "admin-link"}
+            title="Licencias y ventas"
+          >
+            <BadgeDollarSign size={21} aria-hidden="true" />
+            <span>Licencias y ventas</span>
+          </Link>
+        )}
       </nav>
 
       <div className="sidebar-footer">
         <ThemeToggle />
-        <small>Versión profesional 9.1</small>
+        <small>Versión profesional 10.0</small>
       </div>
     </aside>
   );

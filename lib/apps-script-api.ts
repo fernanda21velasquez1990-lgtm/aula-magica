@@ -878,3 +878,35 @@ export async function guardarExpedienteAlumno(
     data: datos,
   });
 }
+
+
+export type PlanPlataforma = {
+  idPlan: string; nombre: string; duracionDias: number; precio: number;
+  moneda: string; estado: string; descripcion: string;
+};
+export type LicenciaAdministrador = {
+  idLicencia: string; idMaestra: string; idPlan: string; plan: string;
+  precio: number; fechaInicio: string; fechaVencimiento: string;
+  estado: string; diasRestantes: number; nombreMaestra: string; correo: string;
+};
+export type PanelSuscripciones = {
+  planes: PlanPlataforma[];
+  licencias: LicenciaAdministrador[];
+  pagos: Array<{idPago:string;idMaestra:string;monto:number;fechaPago:string;estado:string}>;
+  resumen:{total:number;activas:number;porVencer:number;vencidas:number;suspendidas:number;ingresos:number};
+};
+export async function adminObtenerSuscripciones(token:string){
+  return llamarAppsScript<PanelSuscripciones>({action:"adminObtenerSuscripciones",token});
+}
+export async function adminActivarSuscripcion(token:string,datos:{idMaestra:string;idPlan:string;extender?:boolean}){
+  return llamarAppsScript<{guardado:boolean;vencimiento:string}>({action:"adminActivarSuscripcion",token,data:datos});
+}
+export async function adminCambiarEstadoSuscripcion(token:string,datos:{idLicencia:string;estado:string}){
+  return llamarAppsScript<{actualizado:boolean}>({action:"adminCambiarEstadoSuscripcion",token,data:datos});
+}
+export async function adminRegistrarPagoSuscripcion(token:string,datos:{
+  idMaestra:string;idLicencia:string;idPlan:string;monto:number;metodo?:string;
+  referencia?:string;fechaPago?:string;notas?:string;
+}){
+  return llamarAppsScript<{guardado:boolean;idPago:string}>({action:"adminRegistrarPagoSuscripcion",token,data:datos});
+}

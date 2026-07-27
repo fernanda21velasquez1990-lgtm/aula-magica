@@ -15,6 +15,12 @@ const SHEETS = {
   TELEGRAM: ['ID_MAESTRA','CHAT_ID','CODIGO_VINCULACION','ESTADO','FECHA_VINCULACION'],
   MATERIALES_BAUL: ['ID_MATERIAL','TITULO','DESCRIPCION','CATEGORIA','NIVEL','PRECIO','IMAGEN_URL','ARCHIVO_URL','ETIQUETA','DESTACADO','ESTADO','FECHA_PUBLICACION'],
   COMPRAS_BAUL: ['ID_COMPRA','ID_MATERIAL','ID_MAESTRA','FECHA_SOLICITUD','MONTO','ESTADO','REFERENCIA','FECHA_PAGO'],
+  CALENDARIO_ESCOLAR: ['ID_CALENDARIO','ID_MAESTRA','TITULO','TIPO','FECHA_INICIO','FECHA_FIN','HORA','LUGAR','DESCRIPCION','RECORDATORIO','ESTADO','FECHA_REGISTRO'],
+  HORARIO_SEMANAL: ['ID_HORARIO','ID_MAESTRA','DIA','HORA_INICIO','HORA_FIN','ASIGNATURA','GRADO','SECCION','AULA','COLOR','NOTAS','ESTADO'],
+  EXPEDIENTES_ALUMNOS: ['ID_EXPEDIENTE','ID_MAESTRA','ID_ALUMNO','FOTO','FIRMA_MAESTRA','FIRMA_REPRESENTANTE','ALERGIAS','CONDICIONES_MEDICAS','CONTACTO_EMERGENCIA','TELEFONO_EMERGENCIA','AUTORIZACIONES','NOTAS_PRIVADAS','FECHA_ACTUALIZACION'],
+  PLANES_PLATAFORMA: ['ID_PLAN','NOMBRE','DURACION_DIAS','PRECIO','MONEDA','ESTADO','DESCRIPCION'],
+  LICENCIAS: ['ID_LICENCIA','ID_MAESTRA','ID_PLAN','FECHA_INICIO','FECHA_VENCIMIENTO','ESTADO','FECHA_ACTUALIZACION'],
+  PAGOS_SUSCRIPCIONES: ['ID_PAGO','ID_MAESTRA','ID_LICENCIA','ID_PLAN','MONTO','MONEDA','METODO','REFERENCIA','ESTADO','FECHA_PAGO','NOTAS'],
   AUDITORIA: ['ID','ID_MAESTRA','ACCION','MODULO','DETALLE','FECHA','IP']
 };
 
@@ -73,12 +79,12 @@ function crearEstructuraInicial() {
   );
 
   if(filaVersion){
-    config.getRange(filaVersion.__fila,2).setValue('8.0.0');
+    config.getRange(filaVersion.__fila,2).setValue('10.0.0');
   }
 
   SpreadsheetApp.getUi().alert(
     'Aula Mágica',
-    'La estructura está lista y actualizada a la versión 8.0.0.',
+    'La estructura está lista y actualizada a la versión 9.0.0.',
     SpreadsheetApp.getUi().ButtonSet.OK
   );
 }
@@ -88,7 +94,7 @@ function doGet() {
     ok: true,
     aplicacion: APP_NAME,
     estado: 'API funcionando',
-    version: '8.0.0'
+    version: '10.0.0'
   });
 }
 function doPost(e) {
@@ -127,6 +133,18 @@ function doPost(e) {
       case 'adminListarAuditoria': resultado=adminListarAuditoria(token,datos); break;
       case 'adminCrearRespaldo': resultado=adminCrearRespaldo(token); break;
       case 'adminActualizarCompra': resultado=adminActualizarCompra(token,datos); break;
+      case 'listarCalendarioEscolar': resultado=listarCalendarioEscolar(token); break;
+      case 'guardarCalendarioEscolar': resultado=guardarCalendarioEscolar(token,datos); break;
+      case 'eliminarCalendarioEscolar': resultado=eliminarCalendarioEscolar(token,datos); break;
+      case 'listarHorarioSemanal': resultado=listarHorarioSemanal(token); break;
+      case 'guardarHorarioSemanal': resultado=guardarHorarioSemanal(token,datos); break;
+      case 'eliminarHorarioSemanal': resultado=eliminarHorarioSemanal(token,datos); break;
+      case 'obtenerExpedienteAlumno': resultado=obtenerExpedienteAlumno(token,datos); break;
+      case 'guardarExpedienteAlumno': resultado=guardarExpedienteAlumno(token,datos); break;
+      case 'adminObtenerSuscripciones': resultado=adminObtenerSuscripciones(token); break;
+      case 'adminActivarSuscripcion': resultado=adminActivarSuscripcion(token,datos); break;
+      case 'adminCambiarEstadoSuscripcion': resultado=adminCambiarEstadoSuscripcion(token,datos); break;
+      case 'adminRegistrarPagoSuscripcion': resultado=adminRegistrarPagoSuscripcion(token,datos); break;
       case 'listarCalificaciones': resultado=listarCalificaciones(token); break;
       case 'guardarCalificacion': resultado=guardarCalificacion(token,datos); break;
       case 'eliminarCalificacion': resultado=eliminarCalificacion(token,datos); break;
@@ -150,6 +168,10 @@ function doPost(e) {
       case 'cambiarContrasenaMaestra': resultado=cambiarContrasenaMaestra(token,datos); break;
       case 'botVincularTelegramVercel': resultado=botVincularTelegramVercel(datos); break;
       case 'botComandoTelegramVercel': resultado=botComandoTelegramVercel(datos); break;
+      case 'botGuardarCalendarioTelegram': resultado=botGuardarCalendarioTelegram(datos); break;
+      case 'botEliminarCalendarioTelegram': resultado=botEliminarCalendarioTelegram(datos); break;
+      case 'botGuardarHorarioTelegram': resultado=botGuardarHorarioTelegram(datos); break;
+      case 'botEliminarHorarioTelegram': resultado=botEliminarHorarioTelegram(datos); break;
       case 'botListarAlumnosAsistencia': resultado=botListarAlumnosAsistencia(datos); break;
       case 'botGuardarAsistenciaRapida': resultado=botGuardarAsistenciaRapida(datos); break;
       case 'botIniciarAgendaTelegram': resultado=botIniciarAgendaTelegram(datos); break;
@@ -557,6 +579,663 @@ function adminActualizarCompra(token,datos){
   );
 
   return {actualizado:true,estado:estado};
+}
+
+
+function fechaTextoOrganizacionEscolar(valor){
+  if(!valor)return '';
+
+  if(valor instanceof Date&&!isNaN(valor.getTime())){
+    return Utilities.formatDate(
+      valor,
+      obtenerZonaHorariaAulaMagica(),
+      'yyyy-MM-dd'
+    );
+  }
+
+  const texto=String(valor).trim();
+  const iso=texto.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(iso)return iso[1]+'-'+iso[2]+'-'+iso[3];
+
+  const latino=texto.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+  if(latino){
+    return [
+      latino[3],
+      String(latino[2]).padStart(2,'0'),
+      String(latino[1]).padStart(2,'0')
+    ].join('-');
+  }
+
+  return texto;
+}
+
+function horaTextoOrganizacionEscolar(valor){
+  if(!valor)return '';
+
+  if(valor instanceof Date&&!isNaN(valor.getTime())){
+    return Utilities.formatDate(
+      valor,
+      obtenerZonaHorariaAulaMagica(),
+      'HH:mm'
+    );
+  }
+
+  const texto=String(valor).trim();
+  const coincidencia=texto.match(/^(\d{1,2}):(\d{2})/);
+
+  if(!coincidencia)return texto;
+
+  return String(coincidencia[1]).padStart(2,'0')+':'+coincidencia[2];
+}
+
+function listarCalendarioEscolar(token){
+  const maestra=verificarSesion(token);
+
+  return obtenerRegistros('CALENDARIO_ESCOLAR')
+    .filter(r=>
+      String(r.ID_MAESTRA||'').trim()===
+      String(maestra.idMaestra||'').trim()&&
+      String(r.ESTADO||'ACTIVO').trim().toUpperCase()!=='ELIMINADO'
+    )
+    .map(r=>({
+      idCalendario:String(r.ID_CALENDARIO||''),
+      titulo:String(r.TITULO||''),
+      tipo:String(r.TIPO||'EVENTO').toUpperCase(),
+      fechaInicio:fechaTextoOrganizacionEscolar(r.FECHA_INICIO),
+      fechaFin:fechaTextoOrganizacionEscolar(r.FECHA_FIN),
+      hora:horaTextoOrganizacionEscolar(r.HORA),
+      lugar:String(r.LUGAR||''),
+      descripcion:String(r.DESCRIPCION||''),
+      recordatorio:String(r.RECORDATORIO||'1_DIA').toUpperCase(),
+      estado:String(r.ESTADO||'ACTIVO').toUpperCase()
+    }))
+    .sort((a,b)=>
+      (a.fechaInicio+' '+a.hora).localeCompare(
+        b.fechaInicio+' '+b.hora
+      )
+    );
+}
+
+function guardarCalendarioEscolar(token,datos){
+  const maestra=verificarSesion(token);
+  validarObjeto(datos,['titulo','tipo','fechaInicio']);
+
+  const id=String(datos.idCalendario||'').trim()||
+    generarId('CAL');
+
+  const registro={
+    idCalendario:id,
+    titulo:limpiarTexto(datos.titulo),
+    tipo:String(datos.tipo||'EVENTO').trim().toUpperCase(),
+    fechaInicio:fechaTextoOrganizacionEscolar(datos.fechaInicio),
+    fechaFin:fechaTextoOrganizacionEscolar(
+      datos.fechaFin||datos.fechaInicio
+    ),
+    hora:horaTextoOrganizacionEscolar(datos.hora||''),
+    lugar:limpiarTexto(datos.lugar||''),
+    descripcion:limpiarTexto(datos.descripcion||''),
+    recordatorio:String(datos.recordatorio||'1_DIA')
+      .trim().toUpperCase(),
+    estado:String(datos.estado||'ACTIVO').trim().toUpperCase()
+  };
+
+  const permitidos=[
+    'CLASE',
+    'EVALUACION',
+    'REUNION',
+    'FERIADO',
+    'EVENTO',
+    'ENTREGA'
+  ];
+
+  if(!permitidos.includes(registro.tipo)){
+    throw new Error('El tipo del calendario no es válido.');
+  }
+
+  if(registro.fechaFin<registro.fechaInicio){
+    throw new Error('La fecha final no puede ser anterior a la inicial.');
+  }
+
+  const hoja=obtenerHoja('CALENDARIO_ESCOLAR');
+  const existente=obtenerRegistrosConFila('CALENDARIO_ESCOLAR').find(r=>
+    String(r.ID_CALENDARIO||'').trim()===id&&
+    String(r.ID_MAESTRA||'').trim()===
+      String(maestra.idMaestra||'').trim()
+  );
+
+  const fila=[
+    id,
+    maestra.idMaestra,
+    registro.titulo,
+    registro.tipo,
+    registro.fechaInicio,
+    registro.fechaFin,
+    registro.hora,
+    registro.lugar,
+    registro.descripcion,
+    registro.recordatorio,
+    registro.estado,
+    existente?existente.FECHA_REGISTRO||new Date():new Date()
+  ];
+
+  if(existente){
+    hoja.getRange(existente.__fila,1,1,fila.length).setValues([fila]);
+    registrarAuditoria(
+      maestra.idMaestra,
+      'EDITAR',
+      'CALENDARIO_ESCOLAR',
+      'Actividad actualizada: '+registro.titulo
+    );
+  }else{
+    hoja.appendRow(fila);
+    registrarAuditoria(
+      maestra.idMaestra,
+      'CREAR',
+      'CALENDARIO_ESCOLAR',
+      'Actividad creada: '+registro.titulo
+    );
+  }
+
+  hoja.getRange(
+    existente?existente.__fila:hoja.getLastRow(),
+    5,
+    1,
+    3
+  ).setNumberFormat('@');
+
+  return registro;
+}
+
+function eliminarCalendarioEscolar(token,datos){
+  const maestra=verificarSesion(token);
+  validarObjeto(datos,['idCalendario']);
+
+  const registro=obtenerRegistrosConFila('CALENDARIO_ESCOLAR').find(r=>
+    String(r.ID_CALENDARIO||'').trim()===
+      String(datos.idCalendario||'').trim()&&
+    String(r.ID_MAESTRA||'').trim()===
+      String(maestra.idMaestra||'').trim()
+  );
+
+  if(!registro)throw new Error('No se encontró la actividad.');
+
+  obtenerHoja('CALENDARIO_ESCOLAR').deleteRow(registro.__fila);
+
+  registrarAuditoria(
+    maestra.idMaestra,
+    'ELIMINAR',
+    'CALENDARIO_ESCOLAR',
+    'Actividad eliminada: '+String(registro.TITULO||'')
+  );
+
+  return {eliminado:true,idCalendario:String(datos.idCalendario)};
+}
+
+function ordenarDiaHorario(dia){
+  const orden={
+    LUNES:1,
+    MARTES:2,
+    MIERCOLES:3,
+    JUEVES:4,
+    VIERNES:5,
+    SABADO:6,
+    DOMINGO:7
+  };
+
+  return orden[String(dia||'').toUpperCase()]||99;
+}
+
+function listarHorarioSemanal(token){
+  const maestra=verificarSesion(token);
+
+  return obtenerRegistros('HORARIO_SEMANAL')
+    .filter(r=>
+      String(r.ID_MAESTRA||'').trim()===
+        String(maestra.idMaestra||'').trim()&&
+      String(r.ESTADO||'ACTIVO').trim().toUpperCase()!=='ELIMINADO'
+    )
+    .map(r=>({
+      idHorario:String(r.ID_HORARIO||''),
+      dia:String(r.DIA||'LUNES').toUpperCase(),
+      horaInicio:horaTextoOrganizacionEscolar(r.HORA_INICIO),
+      horaFin:horaTextoOrganizacionEscolar(r.HORA_FIN),
+      asignatura:String(r.ASIGNATURA||''),
+      grado:String(r.GRADO||''),
+      seccion:String(r.SECCION||''),
+      aula:String(r.AULA||''),
+      color:String(r.COLOR||'#ff8fc7'),
+      notas:String(r.NOTAS||''),
+      estado:String(r.ESTADO||'ACTIVO').toUpperCase()
+    }))
+    .sort((a,b)=>
+      ordenarDiaHorario(a.dia)-ordenarDiaHorario(b.dia)||
+      a.horaInicio.localeCompare(b.horaInicio)
+    );
+}
+
+function guardarHorarioSemanal(token,datos){
+  const maestra=verificarSesion(token);
+  validarObjeto(
+    datos,
+    ['dia','horaInicio','horaFin','asignatura']
+  );
+
+  const id=String(datos.idHorario||'').trim()||
+    generarId('HOR');
+
+  const dia=String(datos.dia||'').trim().toUpperCase();
+  const dias=[
+    'LUNES',
+    'MARTES',
+    'MIERCOLES',
+    'JUEVES',
+    'VIERNES',
+    'SABADO',
+    'DOMINGO'
+  ];
+
+  if(!dias.includes(dia)){
+    throw new Error('El día seleccionado no es válido.');
+  }
+
+  const horaInicio=horaTextoOrganizacionEscolar(datos.horaInicio);
+  const horaFin=horaTextoOrganizacionEscolar(datos.horaFin);
+
+  if(horaFin<=horaInicio){
+    throw new Error('La hora final debe ser posterior a la inicial.');
+  }
+
+  const hoja=obtenerHoja('HORARIO_SEMANAL');
+  const existente=obtenerRegistrosConFila('HORARIO_SEMANAL').find(r=>
+    String(r.ID_HORARIO||'').trim()===id&&
+    String(r.ID_MAESTRA||'').trim()===
+      String(maestra.idMaestra||'').trim()
+  );
+
+  const fila=[
+    id,
+    maestra.idMaestra,
+    dia,
+    horaInicio,
+    horaFin,
+    limpiarTexto(datos.asignatura),
+    limpiarTexto(datos.grado||maestra.grado||''),
+    limpiarTexto(datos.seccion||maestra.seccion||''),
+    limpiarTexto(datos.aula||''),
+    String(datos.color||'#ff8fc7').trim(),
+    limpiarTexto(datos.notas||''),
+    String(datos.estado||'ACTIVO').trim().toUpperCase()
+  ];
+
+  if(existente){
+    hoja.getRange(existente.__fila,1,1,fila.length).setValues([fila]);
+    registrarAuditoria(
+      maestra.idMaestra,
+      'EDITAR',
+      'HORARIO_SEMANAL',
+      'Clase actualizada: '+String(datos.asignatura||'')
+    );
+  }else{
+    hoja.appendRow(fila);
+    registrarAuditoria(
+      maestra.idMaestra,
+      'CREAR',
+      'HORARIO_SEMANAL',
+      'Clase creada: '+String(datos.asignatura||'')
+    );
+  }
+
+  hoja.getRange(
+    existente?existente.__fila:hoja.getLastRow(),
+    4,
+    1,
+    2
+  ).setNumberFormat('@');
+
+  return {
+    idHorario:id,
+    dia:dia,
+    horaInicio:horaInicio,
+    horaFin:horaFin,
+    asignatura:limpiarTexto(datos.asignatura),
+    grado:limpiarTexto(datos.grado||maestra.grado||''),
+    seccion:limpiarTexto(datos.seccion||maestra.seccion||''),
+    aula:limpiarTexto(datos.aula||''),
+    color:String(datos.color||'#ff8fc7'),
+    notas:limpiarTexto(datos.notas||''),
+    estado:String(datos.estado||'ACTIVO').toUpperCase()
+  };
+}
+
+function eliminarHorarioSemanal(token,datos){
+  const maestra=verificarSesion(token);
+  validarObjeto(datos,['idHorario']);
+
+  const registro=obtenerRegistrosConFila('HORARIO_SEMANAL').find(r=>
+    String(r.ID_HORARIO||'').trim()===
+      String(datos.idHorario||'').trim()&&
+    String(r.ID_MAESTRA||'').trim()===
+      String(maestra.idMaestra||'').trim()
+  );
+
+  if(!registro)throw new Error('No se encontró la clase.');
+
+  obtenerHoja('HORARIO_SEMANAL').deleteRow(registro.__fila);
+
+  registrarAuditoria(
+    maestra.idMaestra,
+    'ELIMINAR',
+    'HORARIO_SEMANAL',
+    'Clase eliminada: '+String(registro.ASIGNATURA||'')
+  );
+
+  return {eliminado:true,idHorario:String(datos.idHorario)};
+}
+
+
+function obtenerAlumnoPropioExpediente(idMaestra,idAlumno){
+  const alumno=obtenerRegistros('ALUMNOS').find(r=>
+    String(r.ID_ALUMNO||'').trim()===String(idAlumno||'').trim()&&
+    String(r.ID_MAESTRA||'').trim()===String(idMaestra||'').trim()&&
+    String(r.ESTADO||'ACTIVO').trim().toUpperCase()!=='ELIMINADO'
+  );
+
+  if(!alumno){
+    throw new Error('No se encontró el alumno o no tienes permiso.');
+  }
+
+  return alumno;
+}
+
+function obtenerExpedienteAlumno(token,datos){
+  const maestra=verificarSesion(token);
+  validarObjeto(datos,['idAlumno']);
+  const alumno=obtenerAlumnoPropioExpediente(
+    maestra.idMaestra,
+    datos.idAlumno
+  );
+
+  const registro=obtenerRegistros('EXPEDIENTES_ALUMNOS').find(r=>
+    String(r.ID_ALUMNO||'').trim()===String(datos.idAlumno||'').trim()&&
+    String(r.ID_MAESTRA||'').trim()===String(maestra.idMaestra||'').trim()
+  );
+
+  return {
+    idExpediente:registro?String(registro.ID_EXPEDIENTE||''):'',
+    idAlumno:String(alumno.ID_ALUMNO||''),
+    foto:registro?String(registro.FOTO||''):'',
+    firmaMaestra:registro?String(registro.FIRMA_MAESTRA||''):'',
+    firmaRepresentante:registro?String(registro.FIRMA_REPRESENTANTE||''):'',
+    alergias:registro?String(registro.ALERGIAS||''):'',
+    condicionesMedicas:registro?String(registro.CONDICIONES_MEDICAS||''):'',
+    contactoEmergencia:registro?String(registro.CONTACTO_EMERGENCIA||''):'',
+    telefonoEmergencia:registro?String(registro.TELEFONO_EMERGENCIA||''):'',
+    autorizaciones:registro?String(registro.AUTORIZACIONES||''):'',
+    notasPrivadas:registro?String(registro.NOTAS_PRIVADAS||''):'',
+    fechaActualizacion:registro&&registro.FECHA_ACTUALIZACION
+      ?formatearFechaHora(registro.FECHA_ACTUALIZACION)
+      :''
+  };
+}
+
+function validarImagenExpediente(valor,nombre,maximo){
+  const texto=String(valor||'');
+  if(!texto)return '';
+  if(!texto.startsWith('data:image/')){
+    throw new Error(nombre+' no tiene un formato de imagen válido.');
+  }
+  if(texto.length>maximo){
+    throw new Error(
+      nombre+' es demasiado grande. Usa una imagen más pequeña.'
+    );
+  }
+  return texto;
+}
+
+function guardarExpedienteAlumno(token,datos){
+  const maestra=verificarSesion(token);
+  validarObjeto(datos,['idAlumno']);
+  const alumno=obtenerAlumnoPropioExpediente(
+    maestra.idMaestra,
+    datos.idAlumno
+  );
+
+  const hoja=obtenerHoja('EXPEDIENTES_ALUMNOS');
+  const existente=obtenerRegistrosConFila('EXPEDIENTES_ALUMNOS').find(r=>
+    String(r.ID_ALUMNO||'').trim()===String(datos.idAlumno||'').trim()&&
+    String(r.ID_MAESTRA||'').trim()===String(maestra.idMaestra||'').trim()
+  );
+
+  const id=existente
+    ?String(existente.ID_EXPEDIENTE||'')
+    :generarId('EXP');
+
+  const foto=validarImagenExpediente(
+    datos.foto,
+    'La foto',
+    45000
+  );
+  const firmaMaestra=validarImagenExpediente(
+    datos.firmaMaestra,
+    'La firma de la maestra',
+    30000
+  );
+  const firmaRepresentante=validarImagenExpediente(
+    datos.firmaRepresentante,
+    'La firma del representante',
+    30000
+  );
+
+  const fila=[
+    id,
+    maestra.idMaestra,
+    String(datos.idAlumno),
+    foto,
+    firmaMaestra,
+    firmaRepresentante,
+    limpiarTexto(datos.alergias||''),
+    limpiarTexto(datos.condicionesMedicas||''),
+    limpiarTexto(datos.contactoEmergencia||''),
+    limpiarTexto(datos.telefonoEmergencia||''),
+    limpiarTexto(datos.autorizaciones||''),
+    limpiarTexto(datos.notasPrivadas||''),
+    new Date()
+  ];
+
+  if(existente){
+    hoja.getRange(existente.__fila,1,1,fila.length).setValues([fila]);
+  }else{
+    hoja.appendRow(fila);
+  }
+
+  registrarAuditoria(
+    maestra.idMaestra,
+    existente?'EDITAR':'CREAR',
+    'EXPEDIENTES_ALUMNOS',
+    'Expediente actualizado: '+
+      String(alumno.NOMBRE||'')+' '+String(alumno.APELLIDO||'')
+  );
+
+  return obtenerExpedienteAlumno(token,{idAlumno:String(datos.idAlumno)});
+}
+
+
+function fechaSuscripcion(valor){
+  if(!valor)return '';
+  if(valor instanceof Date&&!isNaN(valor.getTime())){
+    return Utilities.formatDate(valor,obtenerZonaHorariaAulaMagica(),'yyyy-MM-dd');
+  }
+  const texto=String(valor).trim();
+  const m=texto.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m?m[1]+'-'+m[2]+'-'+m[3]:texto;
+}
+
+function sumarDiasSuscripcion(fecha,dias){
+  const d=new Date(fechaSuscripcion(fecha)+'T12:00:00');
+  d.setDate(d.getDate()+Number(dias||0));
+  return Utilities.formatDate(d,obtenerZonaHorariaAulaMagica(),'yyyy-MM-dd');
+}
+
+function diasRestantesSuscripcion(fecha){
+  const hoy=Utilities.formatDate(new Date(),obtenerZonaHorariaAulaMagica(),'yyyy-MM-dd');
+  return Math.ceil(
+    (new Date(fechaSuscripcion(fecha)+'T12:00:00').getTime()-
+     new Date(hoy+'T12:00:00').getTime())/86400000
+  );
+}
+
+function asegurarPlanesPlataforma(){
+  const hoja=obtenerHoja('PLANES_PLATAFORMA');
+  if(hoja.getLastRow()>1)return;
+  hoja.getRange(2,1,4,7).setValues([
+    ['PLAN_MENSUAL','Mensual',30,30000,'COP','ACTIVO','Acceso por 30 días'],
+    ['PLAN_TRIMESTRAL','Trimestral',90,80000,'COP','ACTIVO','Acceso por 90 días'],
+    ['PLAN_ANUAL','Anual',365,280000,'COP','ACTIVO','Acceso por 365 días'],
+    ['PLAN_PRUEBA','Prueba',30,0,'COP','ACTIVO','Prueba inicial']
+  ]);
+}
+
+function asegurarLicencia(idMaestra){
+  asegurarPlanesPlataforma();
+  let licencia=obtenerRegistrosConFila('LICENCIAS').find(r=>
+    String(r.ID_MAESTRA||'')===String(idMaestra)
+  );
+  if(licencia)return licencia;
+
+  const inicio=Utilities.formatDate(new Date(),obtenerZonaHorariaAulaMagica(),'yyyy-MM-dd');
+  const id=generarId('LIC');
+  obtenerHoja('LICENCIAS').appendRow([
+    id,String(idMaestra),'PLAN_PRUEBA',inicio,
+    sumarDiasSuscripcion(inicio,30),'ACTIVA',new Date()
+  ]);
+  return obtenerRegistrosConFila('LICENCIAS').find(r=>
+    String(r.ID_LICENCIA||'')===id
+  );
+}
+
+function licenciaPublica(r){
+  const plan=obtenerRegistros('PLANES_PLATAFORMA').find(p=>
+    String(p.ID_PLAN||'')===String(r.ID_PLAN||'')
+  )||{};
+  const dias=diasRestantesSuscripcion(r.FECHA_VENCIMIENTO);
+  let estado=String(r.ESTADO||'ACTIVA').toUpperCase();
+  if(estado==='ACTIVA'&&dias<0)estado='VENCIDA';
+  else if(estado==='ACTIVA'&&dias<=7)estado='POR_VENCER';
+  return {
+    idLicencia:String(r.ID_LICENCIA||''),
+    idMaestra:String(r.ID_MAESTRA||''),
+    idPlan:String(r.ID_PLAN||''),
+    plan:String(plan.NOMBRE||r.ID_PLAN||''),
+    precio:Number(plan.PRECIO||0),
+    fechaInicio:fechaSuscripcion(r.FECHA_INICIO),
+    fechaVencimiento:fechaSuscripcion(r.FECHA_VENCIMIENTO),
+    estado:estado,
+    diasRestantes:dias
+  };
+}
+
+function adminObtenerSuscripciones(token){
+  verificarAdministrador(token);
+  asegurarPlanesPlataforma();
+  const maestras=obtenerRegistros('MAESTRAS');
+  maestras.forEach(m=>asegurarLicencia(m.ID_MAESTRA));
+
+  const licencias=obtenerRegistros('LICENCIAS').map(r=>{
+    const m=maestras.find(x=>String(x.ID_MAESTRA)===String(r.ID_MAESTRA))||{};
+    return Object.assign(licenciaPublica(r),{
+      nombreMaestra:(String(m.NOMBRE||'')+' '+String(m.APELLIDO||'')).trim(),
+      correo:String(m.CORREO||'')
+    });
+  });
+
+  const planes=obtenerRegistros('PLANES_PLATAFORMA').map(r=>({
+    idPlan:String(r.ID_PLAN||''),
+    nombre:String(r.NOMBRE||''),
+    duracionDias:Number(r.DURACION_DIAS||0),
+    precio:Number(r.PRECIO||0),
+    moneda:String(r.MONEDA||'COP'),
+    estado:String(r.ESTADO||'ACTIVO'),
+    descripcion:String(r.DESCRIPCION||'')
+  }));
+
+  const pagos=obtenerRegistros('PAGOS_SUSCRIPCIONES').map(r=>({
+    idPago:String(r.ID_PAGO||''),
+    idMaestra:String(r.ID_MAESTRA||''),
+    monto:Number(r.MONTO||0),
+    fechaPago:fechaSuscripcion(r.FECHA_PAGO),
+    estado:String(r.ESTADO||'CONFIRMADO')
+  }));
+
+  return {
+    planes:planes,
+    licencias:licencias,
+    pagos:pagos,
+    resumen:{
+      total:licencias.length,
+      activas:licencias.filter(x=>x.estado==='ACTIVA').length,
+      porVencer:licencias.filter(x=>x.estado==='POR_VENCER').length,
+      vencidas:licencias.filter(x=>x.estado==='VENCIDA').length,
+      suspendidas:licencias.filter(x=>['SUSPENDIDA','BLOQUEADA'].includes(x.estado)).length,
+      ingresos:pagos.filter(x=>x.estado==='CONFIRMADO').reduce((s,x)=>s+x.monto,0)
+    }
+  };
+}
+
+function adminActivarSuscripcion(token,datos){
+  const admin=verificarAdministrador(token);
+  validarObjeto(datos,['idMaestra','idPlan']);
+  const plan=obtenerRegistros('PLANES_PLATAFORMA').find(r=>
+    String(r.ID_PLAN||'')===String(datos.idPlan)
+  );
+  if(!plan)throw new Error('No se encontró el plan.');
+
+  const licencia=asegurarLicencia(datos.idMaestra);
+  const hoy=Utilities.formatDate(new Date(),obtenerZonaHorariaAulaMagica(),'yyyy-MM-dd');
+  const base=Boolean(datos.extender)&&diasRestantesSuscripcion(licencia.FECHA_VENCIMIENTO)>=0
+    ?fechaSuscripcion(licencia.FECHA_VENCIMIENTO):hoy;
+  const vencimiento=sumarDiasSuscripcion(base,Number(plan.DURACION_DIAS||30));
+
+  obtenerHoja('LICENCIAS').getRange(licencia.__fila,1,1,7).setValues([[
+    String(licencia.ID_LICENCIA),String(datos.idMaestra),String(datos.idPlan),
+    hoy,vencimiento,'ACTIVA',new Date()
+  ]]);
+
+  registrarAuditoria(admin.idMaestra,'ACTIVAR','LICENCIAS',
+    'Suscripción activada hasta '+vencimiento);
+
+  return {guardado:true,vencimiento:vencimiento};
+}
+
+function adminCambiarEstadoSuscripcion(token,datos){
+  const admin=verificarAdministrador(token);
+  validarObjeto(datos,['idLicencia','estado']);
+  const estado=String(datos.estado).toUpperCase();
+  if(!['ACTIVA','SUSPENDIDA','BLOQUEADA','CANCELADA'].includes(estado)){
+    throw new Error('Estado no válido.');
+  }
+  const r=obtenerRegistrosConFila('LICENCIAS').find(x=>
+    String(x.ID_LICENCIA||'')===String(datos.idLicencia)
+  );
+  if(!r)throw new Error('No se encontró la licencia.');
+  obtenerHoja('LICENCIAS').getRange(r.__fila,6,1,2).setValues([[estado,new Date()]]);
+  registrarAuditoria(admin.idMaestra,'CAMBIAR_ESTADO','LICENCIAS',estado);
+  return {actualizado:true};
+}
+
+function adminRegistrarPagoSuscripcion(token,datos){
+  const admin=verificarAdministrador(token);
+  validarObjeto(datos,['idMaestra','idLicencia','idPlan','monto']);
+  const id=generarId('PAG');
+  obtenerHoja('PAGOS_SUSCRIPCIONES').appendRow([
+    id,String(datos.idMaestra),String(datos.idLicencia),String(datos.idPlan),
+    Number(datos.monto||0),'COP',limpiarTexto(datos.metodo||''),
+    limpiarTexto(datos.referencia||''),'CONFIRMADO',
+    fechaSuscripcion(datos.fechaPago)||fechaSuscripcion(new Date()),
+    limpiarTexto(datos.notas||'')
+  ]);
+  registrarAuditoria(admin.idMaestra,'REGISTRAR_PAGO','PAGOS_SUSCRIPCIONES',
+    'Pago '+String(datos.monto));
+  return {guardado:true,idPago:id};
 }
 
 function registrarMaestra(datos){
@@ -2166,7 +2845,7 @@ function procesarActualizacionTelegram(actualizacion){
   }else if(comando==='/reuniones'){
     enviarMensajeTelegram(chatId,crearResumenReunionesTelegram(idMaestra),true);
   }else if(comando==='/ayuda'){
-    enviarMensajeTelegram(chatId,'📱 Opciones de Aula Mágica\n\n/alumnos — Total de estudiantes\n/asistencia — Resumen de hoy\n/notas — Resumen de calificaciones\n/planes — Próximas planificaciones\n/cumpleanos — Próximos cumpleaños\n/reuniones — Próximas reuniones\n/agenda — Próximos eventos\n/inicio — Estado de la cuenta',true);
+    enviarMensajeTelegram(chatId,'📱 Opciones de Aula Mágica\n\n/alumnos — Total de estudiantes\n/asistencia — Resumen de hoy\n/notas — Resumen de calificaciones\n/planes — Próximas planificaciones\n/cumpleanos — Próximos cumpleaños\n/reuniones — Próximas reuniones\n/agenda — Próximos eventos\n/calendario — Calendario escolar\n/horario — Horario de hoy\n/inicio — Estado de la cuenta',true);
   }else{
     enviarMensajeTelegram(chatId,'No reconozco esa opción. Usa los botones o escribe /ayuda.',true);
   }
@@ -2680,6 +3359,423 @@ function botVincularTelegramVercel(datos){
   };
 }
 
+
+function obtenerMaestraTelegramVercel(datos){
+  validarSecretoBotVercel(datos);
+  validarObjeto(datos,['chatId']);
+
+  const chatId=String(datos.chatId).trim();
+  const enlace=obtenerRegistros('TELEGRAM').find(r=>
+    String(r.CHAT_ID||'').trim()===chatId&&
+    String(r.ESTADO||'').trim().toUpperCase()==='VINCULADO'
+  );
+
+  if(!enlace){
+    throw new Error(
+      'Esta cuenta de Telegram no está vinculada con Aula Mágica.'
+    );
+  }
+
+  return {
+    chatId:chatId,
+    idMaestra:String(enlace.ID_MAESTRA)
+  };
+}
+
+function crearResumenCalendarioEscolarTelegram(idMaestra,modo){
+  const hoy=Utilities.formatDate(
+    new Date(),
+    obtenerZonaHorariaAulaMagica(),
+    'yyyy-MM-dd'
+  );
+  const manana=Utilities.formatDate(
+    new Date(Date.now()+24*60*60*1000),
+    obtenerZonaHorariaAulaMagica(),
+    'yyyy-MM-dd'
+  );
+
+  let registros=obtenerRegistros('CALENDARIO_ESCOLAR')
+    .filter(r=>
+      String(r.ID_MAESTRA||'').trim()===String(idMaestra)&&
+      String(r.ESTADO||'ACTIVO').trim().toUpperCase()!=='ELIMINADO'
+    )
+    .map(r=>({
+      id:String(r.ID_CALENDARIO||''),
+      titulo:String(r.TITULO||'Actividad'),
+      tipo:String(r.TIPO||'EVENTO'),
+      fecha:fechaTextoOrganizacionEscolar(r.FECHA_INICIO),
+      hora:horaTextoOrganizacionEscolar(r.HORA),
+      lugar:String(r.LUGAR||'')
+    }))
+    .sort((a,b)=>
+      (a.fecha+' '+a.hora).localeCompare(b.fecha+' '+b.hora)
+    );
+
+  const filtro=String(modo||'PROXIMOS').toUpperCase();
+
+  if(filtro==='HOY')registros=registros.filter(r=>r.fecha===hoy);
+  else if(filtro==='MANANA')registros=registros.filter(r=>r.fecha===manana);
+  else registros=registros.filter(r=>r.fecha>=hoy).slice(0,12);
+
+  if(!registros.length){
+    return '🏫 No hay actividades escolares para '+(
+      filtro==='HOY'?'hoy':
+      filtro==='MANANA'?'mañana':
+      'los próximos días'
+    )+'.';
+  }
+
+  const lineas=registros.map(r=>
+    '• '+r.fecha+
+    (r.hora?' · '+r.hora:'')+
+    '\n  '+r.titulo+
+    ' ['+r.tipo+']'+
+    (r.lugar?'\n  📍 '+r.lugar:'')+
+    '\n  ID: '+r.id
+  );
+
+  return [
+    '🏫 Calendario escolar',
+    '',
+    lineas.join('\n\n'),
+    '',
+    'Crear:',
+    '/crear_evento Título | TIPO | AAAA-MM-DD | HH:MM | Lugar',
+    '',
+    'Editar:',
+    '/editar_evento ID | Título | TIPO | AAAA-MM-DD | HH:MM | Lugar',
+    '',
+    'Eliminar:',
+    '/eliminar_evento ID'
+  ].join('\n');
+}
+
+function crearResumenHorarioTelegram(idMaestra,diaSolicitado){
+  const dias=[
+    'DOMINGO',
+    'LUNES',
+    'MARTES',
+    'MIERCOLES',
+    'JUEVES',
+    'VIERNES',
+    'SABADO'
+  ];
+
+  const hoy=dias[new Date().getDay()];
+  const dia=String(diaSolicitado||hoy)
+    .trim()
+    .toUpperCase()
+    .replace('MIÉRCOLES','MIERCOLES')
+    .replace('SÁBADO','SABADO');
+
+  const registros=obtenerRegistros('HORARIO_SEMANAL')
+    .filter(r=>
+      String(r.ID_MAESTRA||'').trim()===String(idMaestra)&&
+      String(r.DIA||'').trim().toUpperCase()===dia&&
+      String(r.ESTADO||'ACTIVO').trim().toUpperCase()!=='ELIMINADO'
+    )
+    .sort((a,b)=>
+      horaTextoOrganizacionEscolar(a.HORA_INICIO)
+        .localeCompare(horaTextoOrganizacionEscolar(b.HORA_INICIO))
+    );
+
+  if(!registros.length){
+    return '🗓️ No hay clases registradas para '+dia+'.\n\n'+
+      'Consulta otro día con:\n/horario LUNES';
+  }
+
+  const lineas=registros.map(r=>
+    '• '+horaTextoOrganizacionEscolar(r.HORA_INICIO)+
+    '–'+horaTextoOrganizacionEscolar(r.HORA_FIN)+
+    ' · '+String(r.ASIGNATURA||'Clase')+
+    (r.GRADO?' · '+String(r.GRADO):'')+
+    (r.SECCION?' '+String(r.SECCION):'')+
+    (r.AULA?'\n  📍 '+String(r.AULA):'')+
+    '\n  ID: '+String(r.ID_HORARIO||'')
+  );
+
+  return [
+    '🗓️ Horario semanal · '+dia,
+    '',
+    lineas.join('\n\n'),
+    '',
+    'Crear:',
+    '/crear_clase DIA | HH:MM | HH:MM | Asignatura | Grado | Sección | Aula',
+    '',
+    'Editar:',
+    '/editar_clase ID | DIA | HH:MM | HH:MM | Asignatura | Grado | Sección | Aula',
+    '',
+    'Eliminar:',
+    '/eliminar_clase ID'
+  ].join('\n');
+}
+
+function dividirCamposTelegram(valor){
+  return String(valor||'')
+    .split('|')
+    .map(x=>String(x||'').trim());
+}
+
+function botGuardarCalendarioTelegram(datos){
+  const acceso=obtenerMaestraTelegramVercel(datos);
+  const campos=dividirCamposTelegram(datos.argumento);
+
+  const editar=Boolean(datos.editar);
+  const minimo=editar?6:5;
+
+  if(campos.length<minimo){
+    throw new Error(
+      editar
+        ? 'Formato: /editar_evento ID | Título | TIPO | AAAA-MM-DD | HH:MM | Lugar'
+        : 'Formato: /crear_evento Título | TIPO | AAAA-MM-DD | HH:MM | Lugar'
+    );
+  }
+
+  const desplazamiento=editar?1:0;
+  const id=editar?campos[0]:'';
+  const titulo=campos[desplazamiento];
+  const tipo=String(campos[desplazamiento+1]||'EVENTO').toUpperCase();
+  const fecha=campos[desplazamiento+2];
+  const hora=campos[desplazamiento+3]||'';
+  const lugar=campos.slice(desplazamiento+4).join(' | ');
+
+  const permitidos=[
+    'CLASE',
+    'EVALUACION',
+    'REUNION',
+    'FERIADO',
+    'EVENTO',
+    'ENTREGA'
+  ];
+
+  if(!permitidos.includes(tipo)){
+    throw new Error(
+      'TIPO debe ser: CLASE, EVALUACION, REUNION, FERIADO, EVENTO o ENTREGA.'
+    );
+  }
+
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(fecha)){
+    throw new Error('La fecha debe tener formato AAAA-MM-DD.');
+  }
+
+  if(hora&&!/^\d{2}:\d{2}$/.test(hora)){
+    throw new Error('La hora debe tener formato HH:MM.');
+  }
+
+  const hoja=obtenerHoja('CALENDARIO_ESCOLAR');
+  const registros=obtenerRegistrosConFila('CALENDARIO_ESCOLAR');
+  const existente=id
+    ?registros.find(r=>
+      String(r.ID_CALENDARIO||'').trim()===id&&
+      String(r.ID_MAESTRA||'').trim()===acceso.idMaestra
+    )
+    :null;
+
+  if(editar&&!existente){
+    throw new Error('No se encontró ese evento o no tienes permiso.');
+  }
+
+  const idFinal=id||generarId('CAL');
+  const fila=[
+    idFinal,
+    acceso.idMaestra,
+    limpiarTexto(titulo),
+    tipo,
+    fecha,
+    fecha,
+    hora,
+    limpiarTexto(lugar),
+    '',
+    '1_DIA',
+    'ACTIVO',
+    existente?existente.FECHA_REGISTRO||new Date():new Date()
+  ];
+
+  if(existente){
+    hoja.getRange(existente.__fila,1,1,fila.length).setValues([fila]);
+  }else{
+    hoja.appendRow(fila);
+  }
+
+  registrarAuditoria(
+    acceso.idMaestra,
+    existente?'EDITAR':'CREAR',
+    'CALENDARIO_ESCOLAR',
+    (existente?'Evento editado: ':'Evento creado: ')+titulo
+  );
+
+  return {
+    vinculado:true,
+    guardado:true,
+    texto:'✅ Actividad '+(existente?'actualizada':'creada')+
+      ' correctamente.\n\n'+
+      titulo+'\n'+fecha+(hora?' · '+hora:'')+
+      '\nID: '+idFinal
+  };
+}
+
+function botEliminarCalendarioTelegram(datos){
+  const acceso=obtenerMaestraTelegramVercel(datos);
+  const id=String(datos.id||'').trim();
+
+  if(!id)throw new Error('Formato: /eliminar_evento ID');
+
+  const registro=obtenerRegistrosConFila('CALENDARIO_ESCOLAR').find(r=>
+    String(r.ID_CALENDARIO||'').trim()===id&&
+    String(r.ID_MAESTRA||'').trim()===acceso.idMaestra
+  );
+
+  if(!registro){
+    throw new Error('No se encontró ese evento o no tienes permiso.');
+  }
+
+  obtenerHoja('CALENDARIO_ESCOLAR').deleteRow(registro.__fila);
+
+  registrarAuditoria(
+    acceso.idMaestra,
+    'ELIMINAR',
+    'CALENDARIO_ESCOLAR',
+    'Evento eliminado desde Telegram: '+String(registro.TITULO||'')
+  );
+
+  return {
+    vinculado:true,
+    eliminado:true,
+    texto:'🗑️ Actividad eliminada correctamente.'
+  };
+}
+
+function botGuardarHorarioTelegram(datos){
+  const acceso=obtenerMaestraTelegramVercel(datos);
+  const campos=dividirCamposTelegram(datos.argumento);
+
+  const editar=Boolean(datos.editar);
+  const minimo=editar?8:7;
+
+  if(campos.length<minimo){
+    throw new Error(
+      editar
+        ? 'Formato: /editar_clase ID | DIA | HH:MM | HH:MM | Asignatura | Grado | Sección | Aula'
+        : 'Formato: /crear_clase DIA | HH:MM | HH:MM | Asignatura | Grado | Sección | Aula'
+    );
+  }
+
+  const desplazamiento=editar?1:0;
+  const id=editar?campos[0]:'';
+  const dia=String(campos[desplazamiento]||'').toUpperCase()
+    .replace('MIÉRCOLES','MIERCOLES')
+    .replace('SÁBADO','SABADO');
+  const inicio=campos[desplazamiento+1];
+  const fin=campos[desplazamiento+2];
+  const asignatura=campos[desplazamiento+3];
+  const grado=campos[desplazamiento+4];
+  const seccion=campos[desplazamiento+5];
+  const aula=campos.slice(desplazamiento+6).join(' | ');
+
+  const dias=[
+    'LUNES','MARTES','MIERCOLES','JUEVES',
+    'VIERNES','SABADO','DOMINGO'
+  ];
+
+  if(!dias.includes(dia)){
+    throw new Error('El día no es válido.');
+  }
+
+  if(
+    !/^\d{2}:\d{2}$/.test(inicio)||
+    !/^\d{2}:\d{2}$/.test(fin)
+  ){
+    throw new Error('Las horas deben tener formato HH:MM.');
+  }
+
+  if(fin<=inicio){
+    throw new Error('La hora final debe ser posterior a la inicial.');
+  }
+
+  const hoja=obtenerHoja('HORARIO_SEMANAL');
+  const registros=obtenerRegistrosConFila('HORARIO_SEMANAL');
+  const existente=id
+    ?registros.find(r=>
+      String(r.ID_HORARIO||'').trim()===id&&
+      String(r.ID_MAESTRA||'').trim()===acceso.idMaestra
+    )
+    :null;
+
+  if(editar&&!existente){
+    throw new Error('No se encontró esa clase o no tienes permiso.');
+  }
+
+  const idFinal=id||generarId('HOR');
+  const fila=[
+    idFinal,
+    acceso.idMaestra,
+    dia,
+    inicio,
+    fin,
+    limpiarTexto(asignatura),
+    limpiarTexto(grado),
+    limpiarTexto(seccion),
+    limpiarTexto(aula),
+    existente?String(existente.COLOR||'#ff8fc7'):'#ff8fc7',
+    '',
+    'ACTIVO'
+  ];
+
+  if(existente){
+    hoja.getRange(existente.__fila,1,1,fila.length).setValues([fila]);
+  }else{
+    hoja.appendRow(fila);
+  }
+
+  registrarAuditoria(
+    acceso.idMaestra,
+    existente?'EDITAR':'CREAR',
+    'HORARIO_SEMANAL',
+    (existente?'Clase editada: ':'Clase creada: ')+asignatura
+  );
+
+  return {
+    vinculado:true,
+    guardado:true,
+    texto:'✅ Clase '+(existente?'actualizada':'creada')+
+      ' correctamente.\n\n'+
+      dia+' · '+inicio+'–'+fin+
+      '\n'+asignatura+
+      '\nID: '+idFinal
+  };
+}
+
+function botEliminarHorarioTelegram(datos){
+  const acceso=obtenerMaestraTelegramVercel(datos);
+  const id=String(datos.id||'').trim();
+
+  if(!id)throw new Error('Formato: /eliminar_clase ID');
+
+  const registro=obtenerRegistrosConFila('HORARIO_SEMANAL').find(r=>
+    String(r.ID_HORARIO||'').trim()===id&&
+    String(r.ID_MAESTRA||'').trim()===acceso.idMaestra
+  );
+
+  if(!registro){
+    throw new Error('No se encontró esa clase o no tienes permiso.');
+  }
+
+  obtenerHoja('HORARIO_SEMANAL').deleteRow(registro.__fila);
+
+  registrarAuditoria(
+    acceso.idMaestra,
+    'ELIMINAR',
+    'HORARIO_SEMANAL',
+    'Clase eliminada desde Telegram: '+String(registro.ASIGNATURA||'')
+  );
+
+  return {
+    vinculado:true,
+    eliminado:true,
+    texto:'🗑️ Clase eliminada correctamente.'
+  };
+}
+
 function botComandoTelegramVercel(datos){
   validarSecretoBotVercel(datos);
   validarObjeto(datos,['chatId','comando']);
@@ -2749,6 +3845,19 @@ function botComandoTelegramVercel(datos){
     texto=crearResumenReunionesTelegram(idMaestra);
   }else if(comando==='agenda'){
     texto=crearResumenAgendaTelegram(idMaestra);
+  }else if(
+    comando==='calendario'||
+    comando==='calendario_hoy'||
+    comando==='calendario_manana'
+  ){
+    const modo=
+      comando==='calendario_hoy'?'HOY':
+      comando==='calendario_manana'?'MANANA':
+      'PROXIMOS';
+    texto=crearResumenCalendarioEscolarTelegram(idMaestra,modo);
+  }else if(comando.indexOf('horario')===0){
+    const partes=comando.split(':');
+    texto=crearResumenHorarioTelegram(idMaestra,partes[1]||'');
   }else if(comando==='ayuda'){
     texto=[
       '📱 Comandos de Aula Mágica',
@@ -7852,6 +8961,74 @@ function construirRecordatorioMananaTelegram(
 
     totalPendientes+=cumpleanos.length;
     secciones++;
+  }
+
+  if(prefs.agenda){
+    const calendario=obtenerRegistros('CALENDARIO_ESCOLAR')
+      .filter(r=>
+        String(r.ID_MAESTRA||'').trim()===idMaestra&&
+        String(r.ESTADO||'ACTIVO').trim().toUpperCase()==='ACTIVO'&&
+        [hoy,manana].includes(
+          fechaTextoOrganizacionEscolar(r.FECHA_INICIO)
+        )
+      )
+      .sort((a,b)=>
+        (
+          fechaTextoOrganizacionEscolar(a.FECHA_INICIO)+' '+
+          horaTextoOrganizacionEscolar(a.HORA)
+        ).localeCompare(
+          fechaTextoOrganizacionEscolar(b.FECHA_INICIO)+' '+
+          horaTextoOrganizacionEscolar(b.HORA)
+        )
+      );
+
+    lineas.push('');
+    lineas.push('🏫 Calendario escolar: '+calendario.length);
+
+    calendario.slice(0,5).forEach(r=>{
+      const fecha=fechaTextoOrganizacionEscolar(r.FECHA_INICIO);
+      const cuando=fecha===hoy?'Hoy':'Mañana';
+
+      lineas.push(
+        '• '+cuando+
+        (r.HORA?' '+horaTextoOrganizacionEscolar(r.HORA):'')+
+        ' · '+String(r.TITULO||'Actividad')
+      );
+    });
+
+    totalPendientes+=calendario.length;
+
+    const diaSemana=[
+      'DOMINGO',
+      'LUNES',
+      'MARTES',
+      'MIERCOLES',
+      'JUEVES',
+      'VIERNES',
+      'SABADO'
+    ][new Date(hoy+'T12:00:00').getDay()];
+
+    const clases=obtenerRegistros('HORARIO_SEMANAL')
+      .filter(r=>
+        String(r.ID_MAESTRA||'').trim()===idMaestra&&
+        String(r.DIA||'').trim().toUpperCase()===diaSemana&&
+        String(r.ESTADO||'ACTIVO').trim().toUpperCase()==='ACTIVO'
+      )
+      .sort((a,b)=>
+        horaTextoOrganizacionEscolar(a.HORA_INICIO)
+          .localeCompare(horaTextoOrganizacionEscolar(b.HORA_INICIO))
+      );
+
+    lineas.push('');
+    lineas.push('🗓️ Clases de hoy: '+clases.length);
+
+    clases.slice(0,8).forEach(r=>{
+      lineas.push(
+        '• '+horaTextoOrganizacionEscolar(r.HORA_INICIO)+
+        '–'+horaTextoOrganizacionEscolar(r.HORA_FIN)+
+        ' · '+String(r.ASIGNATURA||'Clase')
+      );
+    });
   }
 
   if(prefs.planificaciones){
