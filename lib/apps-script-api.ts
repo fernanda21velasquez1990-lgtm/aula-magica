@@ -525,3 +525,60 @@ export async function cambiarContrasenaMaestra(
     data: datos,
   });
 }
+
+
+export type MaterialBaul = {
+  idMaterial: string;
+  titulo: string;
+  descripcion: string;
+  categoria: string;
+  nivel: string;
+  precio: number;
+  imagenUrl: string;
+  etiqueta: string;
+  destacado: boolean;
+  desbloqueado: boolean;
+  compraPendiente: boolean;
+  archivoUrl: string;
+  fechaPublicacion: string;
+};
+
+export type PagoBaul = {
+  whatsapp: string;
+  banco: string;
+  telefono: string;
+  documento: string;
+  titular: string;
+  moneda: string;
+};
+
+export type RespuestaBaul = {
+  materiales: MaterialBaul[];
+  categorias: string[];
+  pago: PagoBaul;
+};
+
+export async function listarMaterialesBaul(token: string) {
+  return llamarAppsScript<RespuestaBaul>({
+    action: "listarMaterialesBaul",
+    token,
+  });
+}
+
+export async function solicitarCompraBaul(
+  token: string,
+  idMaterial: string
+) {
+  return llamarAppsScript<{
+    yaComprado: boolean;
+    idCompra: string;
+    titulo?: string;
+    precio?: number;
+    pago?: PagoBaul;
+    mensaje: string;
+  }>({
+    action: "solicitarCompraBaul",
+    token,
+    data: { idMaterial },
+  });
+}

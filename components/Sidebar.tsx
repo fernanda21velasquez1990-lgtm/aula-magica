@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { LayoutDashboard, Users, ClipboardCheck, GraduationCap, CalendarDays, Cake, Handshake, CalendarClock, Send, FileBarChart, Settings } from "lucide-react";
+import { LayoutDashboard, Users, ClipboardCheck, GraduationCap, CalendarDays, Cake, Handshake, CalendarClock, Send, FileBarChart, Settings, PackageOpen } from "lucide-react";
 const items = [
   ["/dashboard", "Inicio", LayoutDashboard],
   ["/dashboard/alumnos", "Alumnos", Users],
@@ -10,6 +10,7 @@ const items = [
   ["/dashboard/cumpleanos", "Cumpleaños", Cake],
   ["/dashboard/reuniones", "Reuniones", Handshake],
   ["/dashboard/agenda", "Agenda", CalendarClock],
+  ["/dashboard/baul", "Mi Baúl", PackageOpen],
   ["/dashboard/telegram", "Telegram", Send],
   ["/dashboard/reportes", "Reportes", FileBarChart],
   ["/dashboard/configuracion", "Configuración", Settings],

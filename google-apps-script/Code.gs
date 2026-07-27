@@ -13,6 +13,8 @@ const SHEETS = {
   REUNIONES: ['ID_REUNION','ID_MAESTRA','TITULO','FECHA','HORA','LUGAR','PARTICIPANTES','TEMAS','ACUERDOS','ESTADO'],
   AGENDA: ['ID_EVENTO','ID_MAESTRA','TITULO','TIPO','FECHA','HORA','DESCRIPCION','ESTADO','FECHA_REGISTRO'],
   TELEGRAM: ['ID_MAESTRA','CHAT_ID','CODIGO_VINCULACION','ESTADO','FECHA_VINCULACION'],
+  MATERIALES_BAUL: ['ID_MATERIAL','TITULO','DESCRIPCION','CATEGORIA','NIVEL','PRECIO','IMAGEN_URL','ARCHIVO_URL','ETIQUETA','DESTACADO','ESTADO','FECHA_PUBLICACION'],
+  COMPRAS_BAUL: ['ID_COMPRA','ID_MATERIAL','ID_MAESTRA','FECHA_SOLICITUD','MONTO','ESTADO','REFERENCIA','FECHA_PAGO'],
   AUDITORIA: ['ID','ID_MAESTRA','ACCION','MODULO','DETALLE','FECHA','IP']
 };
 
@@ -22,6 +24,7 @@ function onOpen() {
     .addSeparator()
     .addItem('Agregar maestra', 'mostrarFormularioMaestra')
     .addItem('Ver resumen', 'mostrarResumen')
+    .addItem('Preparar Mi Baúl Digital', 'configurarBaulDigital')
     .addSeparator()
     .addItem('Configurar bot Telegram', 'configurarBotTelegram')
     .addItem('Reactivar webhook Telegram', 'reactivarWebhookTelegram')
@@ -47,12 +50,18 @@ function crearEstructuraInicial() {
     for (let c=1;c<=encabezados.length;c++) if (hoja.getColumnWidth(c)<130) hoja.setColumnWidth(c,130);
   });
   const config = ss.getSheetByName('CONFIGURACION');
-  if (config.getLastRow() < 2) config.getRange(2,1,5,3).setValues([
+  if (config.getLastRow() < 2) config.getRange(2,1,11,3).setValues([
     ['NOMBRE_APLICACION',APP_NAME,'Nombre mostrado en la plataforma'],
-    ['VERSION','5.1.0','Versión actual'],
+    ['VERSION','5.2.0','Versión actual'],
     ['SESION_HORAS','24','Duración de sesión'],
     ['REGISTRO_PUBLICO','SI','Permitir registro'],
-    ['TELEGRAM_ACTIVO','NO','Estado del bot']
+    ['TELEGRAM_ACTIVO','NO','Estado del bot'],
+    ['BAUL_WHATSAPP','573000000000','WhatsApp de ventas con código de país'],
+    ['BAUL_BANCO','Configurar banco','Banco para pago móvil'],
+    ['BAUL_TELEFONO','3000000000','Teléfono del pago móvil'],
+    ['BAUL_DOCUMENTO','Configurar documento','Documento del titular'],
+    ['BAUL_TITULAR','Configurar titular','Nombre del titular'],
+    ['BAUL_MONEDA','COP','Moneda mostrada en Mi Baúl']
   ]);
   SpreadsheetApp.getUi().alert('Aula Mágica','La estructura está lista.',SpreadsheetApp.getUi().ButtonSet.OK);
 }
@@ -62,7 +71,7 @@ function doGet() {
     ok: true,
     aplicacion: APP_NAME,
     estado: 'API funcionando',
-    version: '5.1.0'
+    version: '5.2.0'
   });
 }
 function doPost(e) {
@@ -86,6 +95,8 @@ function doPost(e) {
       case 'listarAsistencia': resultado=listarAsistencia(token,datos); break;
       case 'guardarAsistencia': resultado=guardarAsistencia(token,datos); break;
       case 'listarResumenMensualAsistencia': resultado=listarResumenMensualAsistencia(token,datos); break;
+      case 'listarMaterialesBaul': resultado=listarMaterialesBaul(token,datos); break;
+      case 'solicitarCompraBaul': resultado=solicitarCompraBaul(token,datos); break;
       case 'listarCalificaciones': resultado=listarCalificaciones(token); break;
       case 'guardarCalificacion': resultado=guardarCalificacion(token,datos); break;
       case 'eliminarCalificacion': resultado=eliminarCalificacion(token,datos); break;
@@ -446,6 +457,236 @@ function listarResumenMensualAsistencia(token,datos){
     alumnos:filas,
     totales:totales,
     inasistencias:inasistencias
+  };
+}
+
+
+function configurarBaulDigital(){
+  crearEstructuraInicial();
+
+  const configuraciones=[
+    ['BAUL_WHATSAPP','573000000000','WhatsApp de ventas con código de país'],
+    ['BAUL_BANCO','Configurar banco','Banco para pago móvil'],
+    ['BAUL_TELEFONO','3000000000','Teléfono del pago móvil'],
+    ['BAUL_DOCUMENTO','Configurar documento','Documento del titular'],
+    ['BAUL_TITULAR','Configurar titular','Nombre del titular'],
+    ['BAUL_MONEDA','COP','Moneda mostrada en Mi Baúl']
+  ];
+
+  const hoja=obtenerHoja('CONFIGURACION');
+  const existentes=obtenerRegistrosConFila('CONFIGURACION');
+
+  configuraciones.forEach(fila=>{
+    const actual=existentes.find(r=>
+      String(r.CLAVE||'').trim()===fila[0]
+    );
+
+    if(!actual){
+      hoja.appendRow(fila);
+    }
+  });
+
+  const materiales=obtenerHoja('MATERIALES_BAUL');
+  materiales.setTabColor('#b779ff');
+  materiales.getRange('F:F').setNumberFormat('#,##0');
+  materiales.getRange('K:K').setDataValidation(
+    SpreadsheetApp.newDataValidation()
+      .requireValueInList(['ACTIVO','OCULTO'],true)
+      .build()
+  );
+  materiales.getRange('J:J').setDataValidation(
+    SpreadsheetApp.newDataValidation()
+      .requireValueInList(['SI','NO'],true)
+      .build()
+  );
+
+  const compras=obtenerHoja('COMPRAS_BAUL');
+  compras.setTabColor('#ff8fc7');
+  compras.getRange('E:E').setNumberFormat('#,##0');
+  compras.getRange('F:F').setDataValidation(
+    SpreadsheetApp.newDataValidation()
+      .requireValueInList(['PENDIENTE','PAGADO','CANCELADO'],true)
+      .build()
+  );
+
+  SpreadsheetApp.getUi().alert(
+    'Mi Baúl Digital',
+    'Se crearon MATERIALES_BAUL y COMPRAS_BAUL. '+
+    'Completa los datos de pago en CONFIGURACION y publica tus materiales.',
+    SpreadsheetApp.getUi().ButtonSet.OK
+  );
+}
+
+function obtenerConfiguracionValorBaul(clave,valorPorDefecto){
+  const registro=obtenerRegistros('CONFIGURACION').find(r=>
+    String(r.CLAVE||'').trim()===String(clave||'').trim()
+  );
+
+  return registro
+    ?String(registro.VALOR||valorPorDefecto||'').trim()
+    :String(valorPorDefecto||'').trim();
+}
+
+function obtenerConfiguracionBaul(){
+  return {
+    whatsapp:obtenerConfiguracionValorBaul(
+      'BAUL_WHATSAPP',
+      '573000000000'
+    ),
+    banco:obtenerConfiguracionValorBaul(
+      'BAUL_BANCO',
+      'Configurar banco'
+    ),
+    telefono:obtenerConfiguracionValorBaul(
+      'BAUL_TELEFONO',
+      '3000000000'
+    ),
+    documento:obtenerConfiguracionValorBaul(
+      'BAUL_DOCUMENTO',
+      'Configurar documento'
+    ),
+    titular:obtenerConfiguracionValorBaul(
+      'BAUL_TITULAR',
+      'Configurar titular'
+    ),
+    moneda:obtenerConfiguracionValorBaul('BAUL_MONEDA','COP')
+  };
+}
+
+function normalizarBooleanoBaul(valor){
+  return ['SI','SÍ','TRUE','1','YES'].includes(
+    String(valor||'').trim().toUpperCase()
+  );
+}
+
+function listarMaterialesBaul(token,datos){
+  const maestra=verificarSesion(token);
+  const idMaestra=String(maestra.idMaestra||'').trim();
+
+  const compras=obtenerRegistros('COMPRAS_BAUL').filter(r=>
+    String(r.ID_MAESTRA||'').trim()===idMaestra
+  );
+
+  const materiales=obtenerRegistros('MATERIALES_BAUL')
+    .filter(r=>
+      String(r.ESTADO||'ACTIVO').trim().toUpperCase()==='ACTIVO'
+    )
+    .map(r=>{
+      const idMaterial=String(r.ID_MATERIAL||'').trim();
+      const comprasMaterial=compras.filter(c=>
+        String(c.ID_MATERIAL||'').trim()===idMaterial
+      );
+
+      const pagada=comprasMaterial.find(c=>
+        String(c.ESTADO||'').trim().toUpperCase()==='PAGADO'
+      );
+
+      const pendiente=comprasMaterial.find(c=>
+        String(c.ESTADO||'').trim().toUpperCase()==='PENDIENTE'
+      );
+
+      return {
+        idMaterial:idMaterial,
+        titulo:String(r.TITULO||''),
+        descripcion:String(r.DESCRIPCION||''),
+        categoria:String(r.CATEGORIA||'Otros'),
+        nivel:String(r.NIVEL||'Todos'),
+        precio:Number(r.PRECIO||0),
+        imagenUrl:String(r.IMAGEN_URL||''),
+        etiqueta:String(r.ETIQUETA||''),
+        destacado:normalizarBooleanoBaul(r.DESTACADO),
+        desbloqueado:Boolean(pagada),
+        compraPendiente:Boolean(pendiente),
+        archivoUrl:pagada?String(r.ARCHIVO_URL||''):'',
+        fechaPublicacion:formatearFechaParaFormulario(
+          r.FECHA_PUBLICACION
+        )
+      };
+    })
+    .sort((a,b)=>
+      Number(b.destacado)-Number(a.destacado)||
+      a.categoria.localeCompare(b.categoria)||
+      a.titulo.localeCompare(b.titulo)
+    );
+
+  const categorias=[...new Set(
+    materiales.map(m=>m.categoria).filter(Boolean)
+  )].sort();
+
+  return {
+    materiales:materiales,
+    categorias:categorias,
+    pago:obtenerConfiguracionBaul()
+  };
+}
+
+function solicitarCompraBaul(token,datos){
+  const maestra=verificarSesion(token);
+  validarObjeto(datos,['idMaterial']);
+
+  const idMaestra=String(maestra.idMaestra||'').trim();
+  const idMaterial=String(datos.idMaterial||'').trim();
+
+  const material=obtenerRegistros('MATERIALES_BAUL').find(r=>
+    String(r.ID_MATERIAL||'').trim()===idMaterial&&
+    String(r.ESTADO||'ACTIVO').trim().toUpperCase()==='ACTIVO'
+  );
+
+  if(!material){
+    throw new Error('El material ya no está disponible.');
+  }
+
+  const compras=obtenerRegistrosConFila('COMPRAS_BAUL').filter(r=>
+    String(r.ID_MATERIAL||'').trim()===idMaterial&&
+    String(r.ID_MAESTRA||'').trim()===idMaestra
+  );
+
+  const pagada=compras.find(r=>
+    String(r.ESTADO||'').trim().toUpperCase()==='PAGADO'
+  );
+
+  if(pagada){
+    return {
+      yaComprado:true,
+      idCompra:String(pagada.ID_COMPRA||''),
+      mensaje:'Este material ya está desbloqueado.'
+    };
+  }
+
+  let pendiente=compras.find(r=>
+    String(r.ESTADO||'').trim().toUpperCase()==='PENDIENTE'
+  );
+
+  if(!pendiente){
+    const idCompra=generarId('COM');
+    obtenerHoja('COMPRAS_BAUL').appendRow([
+      idCompra,
+      idMaterial,
+      idMaestra,
+      new Date(),
+      Number(material.PRECIO||0),
+      'PENDIENTE',
+      '',
+      ''
+    ]);
+
+    pendiente={ID_COMPRA:idCompra};
+  }
+
+  registrarAuditoria(
+    idMaestra,
+    'SOLICITAR',
+    'MI_BAUL',
+    'Solicitud de compra: '+String(material.TITULO||'Material')
+  );
+
+  return {
+    yaComprado:false,
+    idCompra:String(pendiente.ID_COMPRA||''),
+    titulo:String(material.TITULO||''),
+    precio:Number(material.PRECIO||0),
+    pago:obtenerConfiguracionBaul(),
+    mensaje:'Solicitud creada. Envía el comprobante por WhatsApp.'
   };
 }
 
