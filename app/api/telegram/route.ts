@@ -44,6 +44,23 @@ type BotResult = {
   cancelado?: boolean;
   tieneFecha?: boolean;
   eliminado?: boolean;
+  asistencias?: Array<{
+    idAsistencia: string;
+    idAlumno: string;
+    nombreAlumno: string;
+    fecha: string;
+    estado: string;
+    observaciones?: string;
+  }>;
+  asistencia?: {
+    idAsistencia: string;
+    idAlumno: string;
+    nombreAlumno: string;
+    fecha: string;
+    estado: string;
+    observaciones?: string;
+  };
+  fecha?: string;
   alumno?: {
     idAlumno: string;
     nombre: string;
@@ -261,6 +278,7 @@ function attendanceMenuKeyboard() {
     inline_keyboard: [
       [{ text: "✅ Todos presentes", callback_data: "att_all_present" }],
       [{ text: "👩‍🎓 Marcar alumno", callback_data: "att_students" }],
+      [{ text: "⚙️ Administrar asistencia", callback_data: "attendance_manage" }],
       [{ text: "⬅️ Volver al menú", callback_data: "inicio" }],
     ],
   };
@@ -1123,6 +1141,74 @@ function studentDeleteConfirmKeyboard(studentId: string) {
         {
           text: "No",
           callback_data: `student_item:${studentId}`,
+        },
+      ],
+    ],
+  };
+}
+
+
+function attendanceManageRecordsKeyboard(
+  records: Array<{
+    idAsistencia: string;
+    nombreAlumno: string;
+    estado: string;
+  }>
+) {
+  const rows = records.slice(0, 30).map((record) => [
+    {
+      text: `✅ ${record.nombreAlumno} · ${record.estado}`,
+      callback_data: `attendance_item:${record.idAsistencia}`,
+    },
+  ]);
+
+  rows.push([{ text: "⬅️ Volver", callback_data: "att_manage" }]);
+  return { inline_keyboard: rows };
+}
+
+function attendanceRecordKeyboard(recordId: string, state: string) {
+  const rows: Array<Array<{ text: string; callback_data: string }>> = [];
+
+  const options = [
+    ["PRESENTE", "🟢 Presente"],
+    ["AUSENTE", "🔴 Ausente"],
+    ["TARDE", "⏰ Tarde"],
+    ["JUSTIFICADO", "📄 Justificado"],
+  ] as const;
+
+  for (const [value, label] of options) {
+    if (state !== value) {
+      rows.push([
+        {
+          text: label,
+          callback_data: `attendance_state:${recordId}:${value}`,
+        },
+      ]);
+    }
+  }
+
+  rows.push([
+    {
+      text: "🗑️ Eliminar registro",
+      callback_data: `attendance_delete_confirm:${recordId}`,
+    },
+  ]);
+
+  rows.push([{ text: "⬅️ Volver", callback_data: "attendance_manage" }]);
+  return { inline_keyboard: rows };
+}
+
+function attendanceDeleteKeyboard(recordId: string) {
+  return {
+    inline_keyboard: [
+      [
+        {
+          text: "Sí, eliminar",
+          callback_data: `attendance_delete:${recordId}`,
+        },
+        {
+          text: "No",
+          callback_data: `attendance_item:${recordId}`,
         },
       ],
     ],
@@ -2455,6 +2541,99 @@ async function handleUpdate(update: TelegramUpdate) {
       );
       return;
     }
+  }
+
+  if (command === "attendance_manage") {
+    const result = await callAppsScript<BotResult>(
+      "botListarAsistenciaGestionTelegram",
+      { chatId }
+    );
+
+    const records = result.asistencias || [];
+
+    if (!records.length) {
+      await sendMessage(
+        chatId,
+        "No hay registros de asistencia para hoy.",
+        true,
+        attendanceMenuKeyboard()
+      );
+      return;
+    }
+
+    await sendMessage(
+      chatId,
+      "⚙️ <b>Administrar asistencia</b>\n\nSelecciona un alumno.",
+      true,
+      attendanceManageRecordsKeyboard(records)
+    );
+    return;
+  }
+
+  if (command.startsWith("attendance_item:")) {
+    const recordId = rawText.split(":")[1] || "";
+
+    const result = await callAppsScript<BotResult>(
+      "botObtenerAsistenciaGestionTelegram",
+      { chatId, idAsistencia: recordId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Asistencia"),
+      true,
+      attendanceRecordKeyboard(
+        recordId,
+        result.asistencia?.estado || "PRESENTE"
+      )
+    );
+    return;
+  }
+
+  if (command.startsWith("attendance_state:")) {
+    const [, recordId = "", state = ""] = rawText.split(":");
+
+    const result = await callAppsScript<BotResult>(
+      "botCambiarEstadoAsistenciaTelegram",
+      { chatId, idAsistencia: recordId, estado: state }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Asistencia actualizada."),
+      true,
+      attendanceMenuKeyboard()
+    );
+    return;
+  }
+
+  if (command.startsWith("attendance_delete_confirm:")) {
+    const recordId = rawText.split(":")[1] || "";
+
+    await sendMessage(
+      chatId,
+      "⚠️ ¿Seguro que deseas eliminar este registro de asistencia?",
+      true,
+      attendanceDeleteKeyboard(recordId)
+    );
+    return;
+  }
+
+  if (command.startsWith("attendance_delete:")) {
+    const recordId = rawText.split(":")[1] || "";
+
+    const result = await callAppsScript<BotResult>(
+      "botEliminarAsistenciaTelegram",
+      { chatId, idAsistencia: recordId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Registro eliminado."),
+      true,
+      attendanceMenuKeyboard()
+    );
+    return;
   }
 
   if (command === "att_manage") {
