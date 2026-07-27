@@ -1399,14 +1399,34 @@ function planEditKeyboard(step?: string) {
 }
 
 
+function aulaMagicaPageUrl(pathname: string) {
+  const baseUrl = String(process.env.AULA_MAGICA_URL || "")
+    .trim()
+    .replace(/\/+$/, "");
+
+  const cleanPath = pathname.startsWith("/")
+    ? pathname
+    : `/${pathname}`;
+
+  return `${baseUrl}${cleanPath}`;
+}
+
 function vaultMenuKeyboard() {
-  return {
-    inline_keyboard: [
-      [{ text: "🧰 Ver mis compras", callback_data: "vault_purchases" }],
-      [{ text: "🌐 Abrir Mi Baúl", url: getAppUrl("/dashboard/baul") }],
-      [{ text: "⬅️ Volver al menú", callback_data: "inicio" }],
-    ],
-  };
+  const rows: Array<
+    Array<{ text: string; callback_data?: string; url?: string }>
+  > = [
+    [{ text: "🧰 Ver mis compras", callback_data: "vault_purchases" }],
+  ];
+
+  const vaultUrl = aulaMagicaPageUrl("/dashboard/baul");
+
+  if (vaultUrl.startsWith("https://")) {
+    rows.push([{ text: "🌐 Abrir Mi Baúl", url: vaultUrl }]);
+  }
+
+  rows.push([{ text: "⬅️ Volver al menú", callback_data: "inicio" }]);
+
+  return { inline_keyboard: rows };
 }
 
 function vaultPurchasesKeyboard(
