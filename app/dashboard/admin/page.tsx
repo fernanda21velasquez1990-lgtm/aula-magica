@@ -99,14 +99,20 @@ export default function AdminPage() {
     }
   }, [router]);
 
+  const correoAdministrador = "wilmarvelasquez1783@gmail.com";
+  const esAdministrador =
+    Boolean(usuario?.esAdmin) ||
+    String(usuario?.correo || "").trim().toLowerCase() ===
+      correoAdministrador;
+
   useEffect(() => {
-    if (!usuario?.esAdmin) {
+    if (!esAdministrador) {
       router.replace("/dashboard");
       return;
     }
 
     void cargarPanel();
-  }, [cargarPanel, router, usuario?.esAdmin]);
+  }, [cargarPanel, esAdministrador, router]);
 
   async function cargarAuditoria() {
     const token = obtenerToken();
@@ -290,7 +296,7 @@ export default function AdminPage() {
     );
   }, [busqueda, panel.maestras]);
 
-  if (!usuario?.esAdmin) {
+  if (!esAdministrador) {
     return <div className="state-card">🔐 Verificando acceso administrativo...</div>;
   }
 
