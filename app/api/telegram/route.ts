@@ -43,6 +43,26 @@ type BotResult = {
   cancelado?: boolean;
   tieneFecha?: boolean;
   eliminado?: boolean;
+  reuniones?: Array<{
+    idReunion: string;
+    titulo: string;
+    tipo: string;
+    fecha: string;
+    hora: string;
+    lugar?: string;
+    descripcion?: string;
+    estado: string;
+  }>;
+  reunion?: {
+    idReunion: string;
+    titulo: string;
+    tipo: string;
+    fecha: string;
+    hora: string;
+    lugar?: string;
+    descripcion?: string;
+    estado: string;
+  };
   eventos?: Array<{
     idEvento: string;
     titulo: string;
@@ -276,6 +296,7 @@ function meetingsMenuKeyboard() {
         { text: "📋 Ver próximas", callback_data: "reuniones" },
         { text: "➕ Crear reunión", callback_data: "meeting_create" },
       ],
+      [{ text: "⚙️ Administrar reuniones", callback_data: "meeting_manage" }],
       [{ text: "⬅️ Volver al menú", callback_data: "inicio" }],
     ],
   };
@@ -686,6 +707,85 @@ function agendaDeleteConfirmKeyboard(eventId: string) {
         {
           text: "No",
           callback_data: `agenda_item:${eventId}`,
+        },
+      ],
+    ],
+  };
+}
+
+
+function meetingsManageListKeyboard(
+  meetings: Array<{
+    idReunion: string;
+    titulo: string;
+    fecha: string;
+    hora: string;
+    estado: string;
+  }>
+) {
+  const rows = meetings.slice(0, 20).map((meeting) => [
+    {
+      text: `🤝 ${meeting.fecha} ${meeting.hora} · ${meeting.titulo}`,
+      callback_data: `meeting_item:${meeting.idReunion}`,
+    },
+  ]);
+
+  rows.push([{ text: "⬅️ Volver", callback_data: "meetings_menu" }]);
+  return { inline_keyboard: rows };
+}
+
+function meetingItemKeyboard(meetingId: string, state: string) {
+  const rows: Array<Array<{ text: string; callback_data: string }>> = [];
+
+  if (state !== "REALIZADA") {
+    rows.push([
+      {
+        text: "✅ Marcar realizada",
+        callback_data: `meeting_state:${meetingId}:REALIZADA`,
+      },
+    ]);
+  }
+
+  if (state !== "PROGRAMADA") {
+    rows.push([
+      {
+        text: "🕓 Marcar programada",
+        callback_data: `meeting_state:${meetingId}:PROGRAMADA`,
+      },
+    ]);
+  }
+
+  if (state !== "CANCELADA") {
+    rows.push([
+      {
+        text: "🚫 Cancelar reunión",
+        callback_data: `meeting_state:${meetingId}:CANCELADA`,
+      },
+    ]);
+  }
+
+  rows.push([
+    {
+      text: "🗑️ Eliminar",
+      callback_data: `meeting_delete_confirm:${meetingId}`,
+    },
+  ]);
+
+  rows.push([{ text: "⬅️ Volver", callback_data: "meeting_manage" }]);
+  return { inline_keyboard: rows };
+}
+
+function meetingDeleteConfirmKeyboard(meetingId: string) {
+  return {
+    inline_keyboard: [
+      [
+        {
+          text: "Sí, eliminar",
+          callback_data: `meeting_delete:${meetingId}`,
+        },
+        {
+          text: "No",
+          callback_data: `meeting_item:${meetingId}`,
         },
       ],
     ],
@@ -1288,6 +1388,99 @@ async function handleUpdate(update: TelegramUpdate) {
       );
       return;
     }
+  }
+
+  if (command === "meeting_manage") {
+    const result = await callAppsScript<BotResult>(
+      "botListarReunionesGestionTelegram",
+      { chatId }
+    );
+
+    const meetings = result.reuniones || [];
+
+    if (!meetings.length) {
+      await sendMessage(
+        chatId,
+        "No tienes reuniones próximas para administrar.",
+        true,
+        meetingsMenuKeyboard()
+      );
+      return;
+    }
+
+    await sendMessage(
+      chatId,
+      "⚙️ <b>Administrar reuniones</b>\n\nSelecciona una reunión.",
+      true,
+      meetingsManageListKeyboard(meetings)
+    );
+    return;
+  }
+
+  if (command.startsWith("meeting_item:")) {
+    const meetingId = rawText.split(":")[1] || "";
+
+    const result = await callAppsScript<BotResult>(
+      "botObtenerReunionGestionTelegram",
+      { chatId, idReunion: meetingId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Reunión"),
+      true,
+      meetingItemKeyboard(
+        meetingId,
+        result.reunion?.estado || "PROGRAMADA"
+      )
+    );
+    return;
+  }
+
+  if (command.startsWith("meeting_state:")) {
+    const [, meetingId = "", state = ""] = rawText.split(":");
+
+    const result = await callAppsScript<BotResult>(
+      "botCambiarEstadoReunionTelegram",
+      { chatId, idReunion: meetingId, estado: state }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Reunión actualizada."),
+      true,
+      meetingsMenuKeyboard()
+    );
+    return;
+  }
+
+  if (command.startsWith("meeting_delete_confirm:")) {
+    const meetingId = rawText.split(":")[1] || "";
+
+    await sendMessage(
+      chatId,
+      "⚠️ ¿Seguro que deseas eliminar esta reunión?",
+      true,
+      meetingDeleteConfirmKeyboard(meetingId)
+    );
+    return;
+  }
+
+  if (command.startsWith("meeting_delete:")) {
+    const meetingId = rawText.split(":")[1] || "";
+
+    const result = await callAppsScript<BotResult>(
+      "botEliminarReunionTelegram",
+      { chatId, idReunion: meetingId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Reunión eliminada."),
+      true,
+      meetingsMenuKeyboard()
+    );
+    return;
   }
 
   if (command === "meetings_menu") {
