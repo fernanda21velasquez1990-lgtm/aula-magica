@@ -22,6 +22,7 @@ const SHEETS = {
   LICENCIAS: ['ID_LICENCIA','ID_MAESTRA','ID_PLAN','FECHA_INICIO','FECHA_VENCIMIENTO','ESTADO','FECHA_ACTUALIZACION'],
   PAGOS_SUSCRIPCIONES: ['ID_PAGO','ID_MAESTRA','ID_LICENCIA','ID_PLAN','MONTO','MONEDA','METODO','REFERENCIA','ESTADO','FECHA_PAGO','NOTAS'],
   ACTIVACIONES_CUENTAS: ['ID_ACTIVACION','ID_MAESTRA','CODIGO','ID_PLAN','ESTADO','FECHA_CREACION','FECHA_EXPIRACION','FECHA_ACTIVACION'],
+  SOLICITUDES_PAGO: ['ID_SOLICITUD','ID_MAESTRA','ID_PLAN','MONTO','MONEDA','METODO','REFERENCIA','COMPROBANTE','ESTADO','FECHA_SOLICITUD','FECHA_REVISION','REVISADO_POR','NOTAS_CLIENTE','NOTAS_ADMIN'],
   AUDITORIA: ['ID','ID_MAESTRA','ACCION','MODULO','DETALLE','FECHA','IP']
 };
 
@@ -80,7 +81,7 @@ function crearEstructuraInicial() {
   );
 
   if(filaVersion){
-    config.getRange(filaVersion.__fila,2).setValue('10.2.0');
+    config.getRange(filaVersion.__fila,2).setValue('10.3.0');
   }
 
   SpreadsheetApp.getUi().alert(
@@ -95,7 +96,7 @@ function doGet() {
     ok: true,
     aplicacion: APP_NAME,
     estado: 'API funcionando',
-    version: '10.2.0'
+    version: '10.3.0'
   });
 }
 function doPost(e) {
@@ -149,6 +150,10 @@ function doPost(e) {
       case 'adminGuardarLimitesPlan': resultado=adminGuardarLimitesPlan(token,datos); break;
       case 'adminGenerarActivacionCuenta': resultado=adminGenerarActivacionCuenta(token,datos); break;
       case 'activarCuentaConCodigo': resultado=activarCuentaConCodigo(datos); break;
+      case 'crearSolicitudPago': resultado=crearSolicitudPago(token,datos); break;
+      case 'listarMisSolicitudesPago': resultado=listarMisSolicitudesPago(token); break;
+      case 'adminListarSolicitudesPago': resultado=adminListarSolicitudesPago(token); break;
+      case 'adminRevisarSolicitudPago': resultado=adminRevisarSolicitudPago(token,datos); break;
       case 'listarCalificaciones': resultado=listarCalificaciones(token); break;
       case 'guardarCalificacion': resultado=guardarCalificacion(token,datos); break;
       case 'eliminarCalificacion': resultado=eliminarCalificacion(token,datos); break;
@@ -1529,6 +1534,207 @@ function activarCuentaConCodigo(datos){
     activada:true,
     plan:String(plan.NOMBRE||''),
     fechaVencimiento:vencimiento
+  };
+}
+
+
+function limpiarComprobantePago(valor){
+  const texto=String(valor||'').trim();
+  if(!texto)return '';
+
+  if(texto.length>48000){
+    throw new Error(
+      'El comprobante es demasiado grande. Selecciona una imagen más pequeña.'
+    );
+  }
+
+  if(
+    !texto.startsWith('data:image/jpeg;base64,')&&
+    !texto.startsWith('data:image/png;base64,')&&
+    !texto.startsWith('data:image/webp;base64,')
+  ){
+    throw new Error('El formato del comprobante no es válido.');
+  }
+
+  return texto;
+}
+
+function solicitudPagoPublica(r){
+  const plan=obtenerRegistros('PLANES_PLATAFORMA').find(p=>
+    String(p.ID_PLAN||'')===String(r.ID_PLAN||'')
+  )||{};
+
+  const maestra=obtenerRegistros('MAESTRAS').find(m=>
+    String(m.ID_MAESTRA||'')===String(r.ID_MAESTRA||'')
+  )||{};
+
+  return {
+    idSolicitud:String(r.ID_SOLICITUD||''),
+    idMaestra:String(r.ID_MAESTRA||''),
+    nombreMaestra:(
+      String(maestra.NOMBRE||'')+' '+String(maestra.APELLIDO||'')
+    ).trim(),
+    correo:String(maestra.CORREO||''),
+    idPlan:String(r.ID_PLAN||''),
+    plan:String(plan.NOMBRE||r.ID_PLAN||''),
+    monto:Number(r.MONTO||0),
+    moneda:String(r.MONEDA||'USD').toUpperCase(),
+    metodo:String(r.METODO||''),
+    referencia:String(r.REFERENCIA||''),
+    comprobante:String(r.COMPROBANTE||''),
+    estado:String(r.ESTADO||'PENDIENTE').toUpperCase(),
+    fechaSolicitud:fechaSuscripcion(r.FECHA_SOLICITUD),
+    fechaRevision:fechaSuscripcion(r.FECHA_REVISION),
+    notasCliente:String(r.NOTAS_CLIENTE||''),
+    notasAdmin:String(r.NOTAS_ADMIN||'')
+  };
+}
+
+function crearSolicitudPago(token,datos){
+  const maestra=verificarSesion(token);
+  validarObjeto(datos,['idPlan','monto','moneda','metodo','comprobante']);
+
+  const plan=obtenerRegistros('PLANES_PLATAFORMA').find(r=>
+    String(r.ID_PLAN||'')===String(datos.idPlan||'')&&
+    String(r.ESTADO||'ACTIVO').toUpperCase()==='ACTIVO'
+  );
+
+  if(!plan)throw new Error('No se encontró el plan seleccionado.');
+
+  const pendiente=obtenerRegistros('SOLICITUDES_PAGO').find(r=>
+    String(r.ID_MAESTRA||'')===String(maestra.idMaestra||'')&&
+    String(r.ESTADO||'').toUpperCase()==='PENDIENTE'
+  );
+
+  if(pendiente){
+    throw new Error(
+      'Ya tienes una solicitud de pago pendiente de revisión.'
+    );
+  }
+
+  const id=generarId('SOLPAG');
+  obtenerHoja('SOLICITUDES_PAGO').appendRow([
+    id,
+    String(maestra.idMaestra),
+    String(datos.idPlan),
+    Number(datos.monto||0),
+    String(datos.moneda||'USD').toUpperCase(),
+    limpiarTexto(datos.metodo||''),
+    limpiarTexto(datos.referencia||''),
+    limpiarComprobantePago(datos.comprobante),
+    'PENDIENTE',
+    new Date(),
+    '',
+    '',
+    limpiarTexto(datos.notas||''),
+    ''
+  ]);
+
+  registrarAuditoria(
+    maestra.idMaestra,
+    'CREAR',
+    'SOLICITUDES_PAGO',
+    'Solicitud de pago enviada: '+id
+  );
+
+  return {
+    guardado:true,
+    idSolicitud:id,
+    estado:'PENDIENTE'
+  };
+}
+
+function listarMisSolicitudesPago(token){
+  const maestra=verificarSesion(token);
+  return obtenerRegistros('SOLICITUDES_PAGO')
+    .filter(r=>
+      String(r.ID_MAESTRA||'')===String(maestra.idMaestra||'')
+    )
+    .map(solicitudPagoPublica)
+    .sort((a,b)=>b.fechaSolicitud.localeCompare(a.fechaSolicitud));
+}
+
+function adminListarSolicitudesPago(token){
+  verificarAdministrador(token);
+
+  return obtenerRegistros('SOLICITUDES_PAGO')
+    .map(solicitudPagoPublica)
+    .sort((a,b)=>{
+      if(a.estado==='PENDIENTE'&&b.estado!=='PENDIENTE')return -1;
+      if(a.estado!=='PENDIENTE'&&b.estado==='PENDIENTE')return 1;
+      return b.fechaSolicitud.localeCompare(a.fechaSolicitud);
+    });
+}
+
+function adminRevisarSolicitudPago(token,datos){
+  const admin=verificarAdministrador(token);
+  validarObjeto(datos,['idSolicitud','decision']);
+
+  const decision=String(datos.decision||'').toUpperCase();
+  if(!['APROBAR','RECHAZAR'].includes(decision)){
+    throw new Error('La decisión no es válida.');
+  }
+
+  const solicitud=obtenerRegistrosConFila('SOLICITUDES_PAGO').find(r=>
+    String(r.ID_SOLICITUD||'')===String(datos.idSolicitud||'')
+  );
+
+  if(!solicitud)throw new Error('No se encontró la solicitud.');
+
+  if(String(solicitud.ESTADO||'').toUpperCase()!=='PENDIENTE'){
+    throw new Error('Esta solicitud ya fue revisada.');
+  }
+
+  const nuevoEstado=decision==='APROBAR'?'APROBADA':'RECHAZADA';
+
+  obtenerHoja('SOLICITUDES_PAGO').getRange(
+    solicitud.__fila,
+    9,
+    1,
+    6
+  ).setValues([[
+    nuevoEstado,
+    solicitud.FECHA_SOLICITUD,
+    new Date(),
+    String(admin.idMaestra),
+    String(solicitud.NOTAS_CLIENTE||''),
+    limpiarTexto(datos.notasAdmin||'')
+  ]]);
+
+  let vencimiento='';
+
+  if(decision==='APROBAR'){
+    const licencia=asegurarLicencia(solicitud.ID_MAESTRA);
+
+    const pago=adminRegistrarPagoSuscripcion(token,{
+      idMaestra:String(solicitud.ID_MAESTRA),
+      idLicencia:String(licencia.ID_LICENCIA),
+      idPlan:String(solicitud.ID_PLAN),
+      monto:Number(solicitud.MONTO||0),
+      moneda:String(solicitud.MONEDA||'USD'),
+      metodo:String(solicitud.METODO||''),
+      referencia:String(solicitud.REFERENCIA||''),
+      fechaPago:fechaSuscripcion(new Date()),
+      notas:
+        'Pago aprobado desde solicitud '+
+        String(solicitud.ID_SOLICITUD),
+      renovarLicencia:true
+    });
+
+    vencimiento=String(pago.vencimiento||'');
+  }
+
+  registrarAuditoria(
+    admin.idMaestra,
+    decision,
+    'SOLICITUDES_PAGO',
+    'Solicitud '+String(solicitud.ID_SOLICITUD)
+  );
+
+  return {
+    actualizado:true,
+    estado:nuevoEstado,
+    vencimiento:vencimiento
   };
 }
 

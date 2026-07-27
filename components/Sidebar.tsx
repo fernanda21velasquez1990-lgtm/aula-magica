@@ -17,6 +17,7 @@ import {
   Settings,
   ShieldCheck,
   BadgeDollarSign,
+  ReceiptText,
   Users,
 } from "lucide-react";
 import Link from "next/link";
@@ -80,6 +81,15 @@ export default function Sidebar() {
           );
         })}
 
+        <Link
+          href="/dashboard/renovar"
+          className={pathname === "/dashboard/renovar" ? "active" : ""}
+          title="Renovar plan"
+        >
+          <ReceiptText size={21} aria-hidden="true" />
+          <span>Renovar plan</span>
+        </Link>
+
         {esAdministrador && (
           <Link
             href="/dashboard/admin"
@@ -107,11 +117,26 @@ export default function Sidebar() {
             <span>Licencias y ventas</span>
           </Link>
         )}
+
+        {esAdministrador && (
+          <Link
+            href="/dashboard/admin/solicitudes-pago"
+            className={
+              pathname === "/dashboard/admin/solicitudes-pago"
+                ? "active admin-link"
+                : "admin-link"
+            }
+            title="Comprobantes"
+          >
+            <ReceiptText size={21} aria-hidden="true" />
+            <span>Comprobantes</span>
+          </Link>
+        )}
       </nav>
 
       <div className="sidebar-footer">
         <ThemeToggle />
-        <small>Versión profesional 10.0</small>
+        <small>Versión profesional 10.3</small>
       </div>
     </aside>
   );

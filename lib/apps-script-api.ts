@@ -972,3 +972,79 @@ export async function activarCuentaConCodigo(datos: {
     data: datos,
   });
 }
+
+
+export type SolicitudPago = {
+  idSolicitud: string;
+  idMaestra: string;
+  nombreMaestra: string;
+  correo: string;
+  idPlan: string;
+  plan: string;
+  monto: number;
+  moneda: string;
+  metodo: string;
+  referencia: string;
+  comprobante: string;
+  estado: string;
+  fechaSolicitud: string;
+  fechaRevision: string;
+  notasCliente: string;
+  notasAdmin: string;
+};
+
+export async function crearSolicitudPago(
+  token: string,
+  datos: {
+    idPlan: string;
+    monto: number;
+    moneda: string;
+    metodo: string;
+    referencia?: string;
+    comprobante: string;
+    notas?: string;
+  }
+) {
+  return llamarAppsScript<{
+    guardado: boolean;
+    idSolicitud: string;
+    estado: string;
+  }>({
+    action: "crearSolicitudPago",
+    token,
+    data: datos,
+  });
+}
+
+export async function listarMisSolicitudesPago(token: string) {
+  return llamarAppsScript<SolicitudPago[]>({
+    action: "listarMisSolicitudesPago",
+    token,
+  });
+}
+
+export async function adminListarSolicitudesPago(token: string) {
+  return llamarAppsScript<SolicitudPago[]>({
+    action: "adminListarSolicitudesPago",
+    token,
+  });
+}
+
+export async function adminRevisarSolicitudPago(
+  token: string,
+  datos: {
+    idSolicitud: string;
+    decision: "APROBAR" | "RECHAZAR";
+    notasAdmin?: string;
+  }
+) {
+  return llamarAppsScript<{
+    actualizado: boolean;
+    estado: string;
+    vencimiento: string;
+  }>({
+    action: "adminRevisarSolicitudPago",
+    token,
+    data: datos,
+  });
+}
