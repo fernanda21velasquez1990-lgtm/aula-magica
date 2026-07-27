@@ -167,7 +167,7 @@ export default function ExpedientesPage() {
                 className={seleccionado === item.idAlumno ? "active" : ""}
                 onClick={() => void abrir(item.idAlumno)}
               >
-                <span>{item.foto ? "👤" : "🎓"}</span>
+                <span>🎓</span>
                 <b>{item.nombre} {item.apellido}</b>
                 <small>{item.grado} {item.seccion}</small>
               </button>
