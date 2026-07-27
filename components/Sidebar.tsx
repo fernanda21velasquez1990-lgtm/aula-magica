@@ -17,6 +17,7 @@ import {
   Settings,
   ShieldCheck,
   BadgeDollarSign,
+  BookOpenCheck,
   ReceiptText,
   Users,
 } from "lucide-react";
@@ -28,6 +29,7 @@ import { obtenerMaestra } from "@/lib/session";
 
 const items = [
   ["/dashboard", "Inicio", LayoutDashboard],
+  ["/dashboard/guia", "Guía de uso", BookOpenCheck],
   ["/dashboard/alumnos", "Alumnos", Users],
   ["/dashboard/expedientes", "Expedientes", FolderHeart],
   ["/dashboard/asistencia", "Asistencia", ClipboardCheck],
@@ -136,7 +138,7 @@ export default function Sidebar() {
 
       <div className="sidebar-footer">
         <ThemeToggle />
-        <small>Versión profesional 10.3</small>
+        <small>Versión profesional 10.4</small>
       </div>
     </aside>
   );
