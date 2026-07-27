@@ -43,6 +43,30 @@ type BotResult = {
   cancelado?: boolean;
   tieneFecha?: boolean;
   eliminado?: boolean;
+  calificaciones?: Array<{
+    idCalificacion: string;
+    idAlumno: string;
+    nombreAlumno: string;
+    asignatura: string;
+    actividad: string;
+    periodo: string;
+    calificacion: number;
+    calificacionMaxima: number;
+    fecha: string;
+    observaciones?: string;
+  }>;
+  calificacion?: {
+    idCalificacion: string;
+    idAlumno: string;
+    nombreAlumno: string;
+    asignatura: string;
+    actividad: string;
+    periodo: string;
+    calificacion: number;
+    calificacionMaxima: number;
+    fecha: string;
+    observaciones?: string;
+  };
   planes?: Array<{
     idPlanificacion: string;
     titulo: string;
@@ -399,6 +423,7 @@ function gradesMenuKeyboard() {
         { text: "📋 Ver resumen", callback_data: "notas" },
         { text: "➕ Registrar nota", callback_data: "grade_create" },
       ],
+      [{ text: "⚙️ Administrar notas", callback_data: "grade_manage" }],
       [{ text: "⬅️ Volver al menú", callback_data: "inicio" }],
     ],
   };
@@ -897,6 +922,92 @@ function planDeleteConfirmKeyboard(planId: string) {
   };
 }
 
+
+function gradesManageListKeyboard(
+  grades: Array<{
+    idCalificacion: string;
+    nombreAlumno: string;
+    asignatura: string;
+    actividad: string;
+    calificacion: number;
+    calificacionMaxima: number;
+  }>
+) {
+  const rows = grades.slice(0, 20).map((grade) => [
+    {
+      text:
+        `📝 ${grade.nombreAlumno} · ${grade.asignatura} · ` +
+        `${grade.calificacion}/${grade.calificacionMaxima}`,
+      callback_data: `grade_item:${grade.idCalificacion}`,
+    },
+  ]);
+
+  rows.push([{ text: "⬅️ Volver", callback_data: "grades_menu" }]);
+  return { inline_keyboard: rows };
+}
+
+function gradeItemKeyboard(gradeId: string) {
+  return {
+    inline_keyboard: [
+      [
+        {
+          text: "✏️ Corregir nota",
+          callback_data: `grade_edit:${gradeId}`,
+        },
+      ],
+      [
+        {
+          text: "🗑️ Eliminar",
+          callback_data: `grade_delete_confirm:${gradeId}`,
+        },
+      ],
+      [{ text: "⬅️ Volver", callback_data: "grade_manage" }],
+    ],
+  };
+}
+
+function gradeEditKeyboard(step?: string) {
+  if (step === "CONFIRMAR") {
+    return {
+      inline_keyboard: [
+        [
+          {
+            text: "✅ Guardar corrección",
+            callback_data: "grade_edit_confirm",
+          },
+          {
+            text: "❌ Cancelar",
+            callback_data: "grade_edit_cancel",
+          },
+        ],
+      ],
+    };
+  }
+
+  return {
+    inline_keyboard: [
+      [{ text: "❌ Cancelar", callback_data: "grade_edit_cancel" }],
+    ],
+  };
+}
+
+function gradeDeleteConfirmKeyboard(gradeId: string) {
+  return {
+    inline_keyboard: [
+      [
+        {
+          text: "Sí, eliminar",
+          callback_data: `grade_delete:${gradeId}`,
+        },
+        {
+          text: "No",
+          callback_data: `grade_item:${gradeId}`,
+        },
+      ],
+    ],
+  };
+}
+
 function mainMenuKeyboard(linked = true) {
   const rows: InlineButton[][] = linked
     ? [
@@ -1289,6 +1400,146 @@ async function handleUpdate(update: TelegramUpdate) {
       );
       return;
     }
+  }
+
+  if (command === "grade_manage") {
+    const result = await callAppsScript<BotResult>(
+      "botListarCalificacionesGestionTelegram",
+      { chatId }
+    );
+
+    const grades = result.calificaciones || [];
+
+    if (!grades.length) {
+      await sendMessage(
+        chatId,
+        "No tienes calificaciones para administrar.",
+        true,
+        gradesMenuKeyboard()
+      );
+      return;
+    }
+
+    await sendMessage(
+      chatId,
+      "⚙️ <b>Administrar calificaciones</b>\n\nSelecciona una calificación.",
+      true,
+      gradesManageListKeyboard(grades)
+    );
+    return;
+  }
+
+  if (command.startsWith("grade_item:")) {
+    const gradeId = rawText.split(":")[1] || "";
+
+    const result = await callAppsScript<BotResult>(
+      "botObtenerCalificacionGestionTelegram",
+      { chatId, idCalificacion: gradeId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Calificación"),
+      true,
+      gradeItemKeyboard(gradeId)
+    );
+    return;
+  }
+
+  if (command.startsWith("grade_edit:")) {
+    const gradeId = rawText.split(":")[1] || "";
+
+    const result = await callAppsScript<BotResult>(
+      "botIniciarEdicionCalificacionTelegram",
+      { chatId, idCalificacion: gradeId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Escribe la nueva calificación."),
+      true,
+      gradeEditKeyboard(result.paso)
+    );
+    return;
+  }
+
+  if (command === "grade_edit_confirm") {
+    const result = await callAppsScript<BotResult>(
+      "botConfirmarEdicionCalificacionTelegram",
+      { chatId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Calificación corregida."),
+      true,
+      gradesMenuKeyboard()
+    );
+    return;
+  }
+
+  if (command === "grade_edit_cancel") {
+    const result = await callAppsScript<BotResult>(
+      "botCancelarEdicionCalificacionTelegram",
+      { chatId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Operación cancelada."),
+      true
+    );
+    return;
+  }
+
+  if (!callback && !rawText.startsWith("/")) {
+    const gradeEditFlow = await callAppsScript<BotResult>(
+      "botProcesarEdicionCalificacionTelegram",
+      { chatId, texto: rawText }
+    );
+
+    if (gradeEditFlow.activo || gradeEditFlow.cancelado) {
+      await sendMessage(
+        chatId,
+        escapeHtml(
+          gradeEditFlow.texto || "Continúa con el siguiente paso."
+        ),
+        true,
+        gradeEditFlow.activo
+          ? gradeEditKeyboard(gradeEditFlow.paso)
+          : mainMenuKeyboard(true)
+      );
+      return;
+    }
+  }
+
+  if (command.startsWith("grade_delete_confirm:")) {
+    const gradeId = rawText.split(":")[1] || "";
+
+    await sendMessage(
+      chatId,
+      "⚠️ ¿Seguro que deseas eliminar esta calificación?",
+      true,
+      gradeDeleteConfirmKeyboard(gradeId)
+    );
+    return;
+  }
+
+  if (command.startsWith("grade_delete:")) {
+    const gradeId = rawText.split(":")[1] || "";
+
+    const result = await callAppsScript<BotResult>(
+      "botEliminarCalificacionTelegram",
+      { chatId, idCalificacion: gradeId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Calificación eliminada."),
+      true,
+      gradesMenuKeyboard()
+    );
+    return;
   }
 
   if (command === "grades_menu") {
