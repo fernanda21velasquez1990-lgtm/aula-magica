@@ -43,6 +43,24 @@ type BotResult = {
   cancelado?: boolean;
   tieneFecha?: boolean;
   eliminado?: boolean;
+  eventos?: Array<{
+    idEvento: string;
+    titulo: string;
+    tipo: string;
+    fecha: string;
+    hora: string;
+    descripcion?: string;
+    estado: string;
+  }>;
+  evento?: {
+    idEvento: string;
+    titulo: string;
+    tipo: string;
+    fecha: string;
+    hora: string;
+    descripcion?: string;
+    estado: string;
+  };
   perfil?: {
     idMaestra: string;
     nombre: string;
@@ -202,6 +220,7 @@ function agendaMenuKeyboard() {
         { text: "📋 Ver próximos", callback_data: "agenda" },
         { text: "➕ Crear evento", callback_data: "agenda_create" },
       ],
+      [{ text: "⚙️ Administrar eventos", callback_data: "agenda_manage" }],
       [{ text: "⬅️ Volver al menú", callback_data: "inicio" }],
     ],
   };
@@ -592,6 +611,85 @@ function keyboardForSettingsStep(step?: string) {
   return step === "CONFIRMAR"
     ? settingsConfirmKeyboard()
     : settingsCancelKeyboard();
+}
+
+
+function agendaManageListKeyboard(
+  events: Array<{
+    idEvento: string;
+    titulo: string;
+    fecha: string;
+    hora: string;
+    estado: string;
+  }>
+) {
+  const rows = events.slice(0, 20).map((event) => [
+    {
+      text: `📅 ${event.fecha} ${event.hora} · ${event.titulo}`,
+      callback_data: `agenda_item:${event.idEvento}`,
+    },
+  ]);
+
+  rows.push([{ text: "⬅️ Volver", callback_data: "agenda_menu" }]);
+  return { inline_keyboard: rows };
+}
+
+function agendaItemKeyboard(eventId: string, state: string) {
+  const rows: Array<Array<{ text: string; callback_data: string }>> = [];
+
+  if (state !== "COMPLETADO") {
+    rows.push([
+      {
+        text: "✅ Marcar completado",
+        callback_data: `agenda_state:${eventId}:COMPLETADO`,
+      },
+    ]);
+  }
+
+  if (state !== "PENDIENTE") {
+    rows.push([
+      {
+        text: "🕓 Marcar pendiente",
+        callback_data: `agenda_state:${eventId}:PENDIENTE`,
+      },
+    ]);
+  }
+
+  if (state !== "CANCELADO") {
+    rows.push([
+      {
+        text: "🚫 Cancelar evento",
+        callback_data: `agenda_state:${eventId}:CANCELADO`,
+      },
+    ]);
+  }
+
+  rows.push([
+    {
+      text: "🗑️ Eliminar",
+      callback_data: `agenda_delete_confirm:${eventId}`,
+    },
+  ]);
+
+  rows.push([{ text: "⬅️ Volver", callback_data: "agenda_manage" }]);
+  return { inline_keyboard: rows };
+}
+
+function agendaDeleteConfirmKeyboard(eventId: string) {
+  return {
+    inline_keyboard: [
+      [
+        {
+          text: "Sí, eliminar",
+          callback_data: `agenda_delete:${eventId}`,
+        },
+        {
+          text: "No",
+          callback_data: `agenda_item:${eventId}`,
+        },
+      ],
+    ],
+  };
 }
 
 function mainMenuKeyboard(linked = true) {
@@ -1259,6 +1357,99 @@ async function handleUpdate(update: TelegramUpdate) {
       );
       return;
     }
+  }
+
+  if (command === "agenda_manage") {
+    const result = await callAppsScript<BotResult>(
+      "botListarEventosGestionTelegram",
+      { chatId }
+    );
+
+    const events = result.eventos || [];
+
+    if (!events.length) {
+      await sendMessage(
+        chatId,
+        "No tienes eventos próximos para administrar.",
+        true,
+        agendaMenuKeyboard()
+      );
+      return;
+    }
+
+    await sendMessage(
+      chatId,
+      "⚙️ <b>Administrar eventos</b>\n\nSelecciona un evento.",
+      true,
+      agendaManageListKeyboard(events)
+    );
+    return;
+  }
+
+  if (command.startsWith("agenda_item:")) {
+    const eventId = rawText.split(":")[1] || "";
+
+    const result = await callAppsScript<BotResult>(
+      "botObtenerEventoGestionTelegram",
+      { chatId, idEvento: eventId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Evento"),
+      true,
+      agendaItemKeyboard(
+        eventId,
+        result.evento?.estado || "PENDIENTE"
+      )
+    );
+    return;
+  }
+
+  if (command.startsWith("agenda_state:")) {
+    const [, eventId = "", state = ""] = rawText.split(":");
+
+    const result = await callAppsScript<BotResult>(
+      "botCambiarEstadoEventoTelegram",
+      { chatId, idEvento: eventId, estado: state }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Evento actualizado."),
+      true,
+      agendaMenuKeyboard()
+    );
+    return;
+  }
+
+  if (command.startsWith("agenda_delete_confirm:")) {
+    const eventId = rawText.split(":")[1] || "";
+
+    await sendMessage(
+      chatId,
+      "⚠️ ¿Seguro que deseas eliminar este evento?",
+      true,
+      agendaDeleteConfirmKeyboard(eventId)
+    );
+    return;
+  }
+
+  if (command.startsWith("agenda_delete:")) {
+    const eventId = rawText.split(":")[1] || "";
+
+    const result = await callAppsScript<BotResult>(
+      "botEliminarEventoTelegram",
+      { chatId, idEvento: eventId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Evento eliminado."),
+      true,
+      agendaMenuKeyboard()
+    );
+    return;
   }
 
   if (command === "agenda_menu") {
