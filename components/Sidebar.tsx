@@ -71,21 +71,6 @@ export default function Sidebar() {
             </Link>
           );
         })}
-        {esAdministrador && (
-          <Link
-            href="/dashboard/admin"
-            className={
-              pathname.startsWith("/dashboard/admin") ? "active admin-link" : "admin-link"
-            }
-            aria-current={
-              pathname.startsWith("/dashboard/admin") ? "page" : undefined
-            }
-            title="Panel Administrador"
-          >
-            <ShieldCheck size={21} aria-hidden="true" />
-            <span>Administrador</span>
-          </Link>
-        )}
       </nav>
 
       <div className="sidebar-footer">

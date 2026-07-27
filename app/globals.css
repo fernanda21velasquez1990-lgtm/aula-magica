@@ -336,3 +336,100 @@ img{max-width:100%}
 [data-theme="dark"] .login-benefits-heading strong,[data-theme="dark"] .login-benefits-grid strong{color:#f5edf7}
 [data-theme="dark"] .login-benefits-heading small,[data-theme="dark"] .login-benefits-grid small,[data-theme="dark"] .login-benefits-footer{color:#c5b8cb}
 @media(max-width:760px){.login-benefits-grid{grid-template-columns:1fr}.login-benefits{padding:15px}}
+
+
+/* Aula Mágica v8.0.2 - login organizado y logo compacto */
+.login-shell{
+  align-items:center!important;
+  min-height:100vh!important;
+  padding:28px!important;
+}
+.login-card{
+  width:min(1080px,100%)!important;
+  min-height:690px!important;
+  max-height:none!important;
+  grid-template-columns:minmax(0,1fr) minmax(430px,.95fr)!important;
+  overflow:hidden!important;
+}
+.login-visual{
+  display:flex!important;
+  flex-direction:column!important;
+  justify-content:center!important;
+  padding:46px 48px!important;
+  overflow:hidden!important;
+}
+.login-brand-logo.compact{
+  width:220px!important;
+  height:150px!important;
+  margin:0 auto 18px!important;
+  display:grid!important;
+  place-items:center!important;
+  overflow:visible!important;
+}
+.login-brand-logo.compact img{
+  width:100%!important;
+  height:100%!important;
+  object-fit:contain!important;
+  image-rendering:auto!important;
+  filter:drop-shadow(0 12px 18px rgba(47,31,59,.18))!important;
+}
+.login-form-panel{
+  display:flex!important;
+  flex-direction:column!important;
+  justify-content:center!important;
+  padding:42px 48px!important;
+  overflow:visible!important;
+}
+.login-benefits{
+  margin-top:18px!important;
+  padding:16px!important;
+}
+.login-admin-notice{
+  margin-top:12px;
+  padding:10px 12px;
+  border-radius:12px;
+  background:#efe9ff;
+  color:#604399;
+  font-size:11px;
+  font-weight:800;
+  line-height:1.4;
+  text-align:center;
+}
+.admin-link{
+  background:linear-gradient(135deg,#ffe2ef,#ece4ff)!important;
+  border:1px solid #e6d7ea!important;
+  color:#663f92!important;
+  box-shadow:0 8px 18px rgba(100,63,146,.12)!important;
+}
+.admin-link span{font-weight:900!important}
+[data-theme="dark"] .login-admin-notice{
+  background:#3a2d48;
+  color:#e8d9ff;
+}
+@media(max-width:900px){
+  .login-card{
+    grid-template-columns:1fr!important;
+  }
+  .login-visual{
+    padding:28px 28px 24px!important;
+  }
+  .login-brand-logo.compact{
+    width:170px!important;
+    height:112px!important;
+    margin-bottom:10px!important;
+  }
+  .login-form-panel{
+    padding:28px!important;
+  }
+}
+@media(max-width:560px){
+  .login-shell{padding:12px!important}
+  .login-card{min-height:auto!important}
+  .login-visual{padding:22px 18px!important}
+  .login-form-panel{padding:22px 18px 26px!important}
+  .login-brand-logo.compact{
+    width:145px!important;
+    height:96px!important;
+  }
+  .login-benefits-grid{grid-template-columns:1fr!important}
+}

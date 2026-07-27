@@ -211,6 +211,11 @@ export default function LoginPage() {
               <div className="login-benefits-footer">
                 🔐 Acceso protegido · 📱 Funciona en celular · ☁️ Datos sincronizados
               </div>
+
+              <div className="login-admin-notice">
+                🛡️ El Panel Administrador aparece en el menú lateral
+                después de iniciar sesión con la cuenta autorizada.
+              </div>
             </section>
           )}
         </div>
