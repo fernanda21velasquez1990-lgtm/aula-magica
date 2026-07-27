@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   guardarAsistencia,
@@ -44,12 +44,28 @@ export default function AsistenciaPage() {
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState("");
+  const [hayCambiosLocales, setHayCambiosLocales] = useState(false);
+  const [ultimaActualizacion, setUltimaActualizacion] = useState<Date | null>(null);
+  const hayCambiosRef = useRef(false);
+  const cargandoRef = useRef(false);
+  const guardandoRef = useRef(false);
 
   useEffect(() => {
-    void cargarAsistencia(fecha);
-  }, [fecha]);
+    hayCambiosRef.current = hayCambiosLocales;
+  }, [hayCambiosLocales]);
 
-  async function cargarAsistencia(fechaSeleccionada: string) {
+  useEffect(() => {
+    cargandoRef.current = cargando;
+  }, [cargando]);
+
+  useEffect(() => {
+    guardandoRef.current = guardando;
+  }, [guardando]);
+
+  const cargarAsistencia = useCallback(async (
+    fechaSeleccionada: string,
+    silencioso = false
+  ) => {
     const token = obtenerToken();
     if (!token) {
       eliminarSesion();
@@ -57,24 +73,58 @@ export default function AsistenciaPage() {
       return;
     }
 
-    setCargando(true);
-    setMensaje("");
+    if (!silencioso) {
+      setCargando(true);
+      setMensaje("");
+    }
 
     try {
       const datos = await listarAsistencia(token, fechaSeleccionada);
       setAlumnos(datos);
+      setHayCambiosLocales(false);
+      setUltimaActualizacion(new Date());
     } catch (error) {
-      setMensaje(
-        error instanceof Error
-          ? error.message
-          : "No se pudo cargar la asistencia."
-      );
+      if (!silencioso) {
+        setMensaje(
+          error instanceof Error
+            ? error.message
+            : "No se pudo cargar la asistencia."
+        );
+      }
     } finally {
-      setCargando(false);
+      if (!silencioso) setCargando(false);
     }
-  }
+  }, [router]);
+
+  useEffect(() => {
+    void cargarAsistencia(fecha);
+  }, [fecha, cargarAsistencia]);
+
+  useEffect(() => {
+    const actualizarSiCorresponde = () => {
+      if (
+        document.visibilityState === "visible" &&
+        !hayCambiosRef.current &&
+        !cargandoRef.current &&
+        !guardandoRef.current
+      ) {
+        void cargarAsistencia(fecha, true);
+      }
+    };
+
+    const intervalo = window.setInterval(actualizarSiCorresponde, 10_000);
+    window.addEventListener("focus", actualizarSiCorresponde);
+    document.addEventListener("visibilitychange", actualizarSiCorresponde);
+
+    return () => {
+      window.clearInterval(intervalo);
+      window.removeEventListener("focus", actualizarSiCorresponde);
+      document.removeEventListener("visibilitychange", actualizarSiCorresponde);
+    };
+  }, [fecha, cargarAsistencia]);
 
   function cambiarEstado(idAlumno: string, estado: EstadoAsistencia) {
+    setHayCambiosLocales(true);
     setAlumnos((actuales) =>
       actuales.map((alumno) =>
         alumno.idAlumno === idAlumno ? { ...alumno, estado } : alumno
@@ -83,6 +133,7 @@ export default function AsistenciaPage() {
   }
 
   function cambiarObservaciones(idAlumno: string, observaciones: string) {
+    setHayCambiosLocales(true);
     setAlumnos((actuales) =>
       actuales.map((alumno) =>
         alumno.idAlumno === idAlumno
@@ -93,6 +144,7 @@ export default function AsistenciaPage() {
   }
 
   function marcarTodos(estado: Exclude<EstadoAsistencia, "">) {
+    setHayCambiosLocales(true);
     setAlumnos((actuales) =>
       actuales.map((alumno) => ({ ...alumno, estado }))
     );
@@ -123,6 +175,7 @@ export default function AsistenciaPage() {
           resultado.guardados === 1 ? "" : "s"
         }.`
       );
+      setHayCambiosLocales(false);
       await cargarAsistencia(fecha);
     } catch (error) {
       setMensaje(
@@ -200,6 +253,14 @@ export default function AsistenciaPage() {
         <div className="attendance-quick-actions">
           <button type="button" onClick={() => marcarTodos("PRESENTE")}>✅ Todos presentes</button>
           <button type="button" onClick={() => marcarTodos("AUSENTE")}>❌ Todos ausentes</button>
+          <button
+            type="button"
+            onClick={() => void cargarAsistencia(fecha)}
+            disabled={cargando || guardando}
+            title="Traer los datos más recientes de Google Sheets"
+          >
+            🔄 Actualizar datos
+          </button>
         </div>
 
         <button
@@ -211,6 +272,20 @@ export default function AsistenciaPage() {
           {guardando ? "Guardando..." : "Guardar asistencia"}
         </button>
       </section>
+
+      {ultimaActualizacion && !mensaje && (
+        <div className="attendance-message">
+          🔄 Sincronizado con Google Sheets a las{" "}
+          {ultimaActualizacion.toLocaleTimeString("es-ES", {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          })}
+          {hayCambiosLocales
+            ? " · Hay cambios locales sin guardar."
+            : " · Actualización automática activa."}
+        </div>
+      )}
 
       {mensaje && <div className="attendance-message">{mensaje}</div>}
 
