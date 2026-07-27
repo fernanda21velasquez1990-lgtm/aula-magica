@@ -53,12 +53,19 @@ export default function ReunionesPage() {
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState("");
+  const [ultimaActualizacion, setUltimaActualizacion] = useState<Date | null>(null);
+  const formularioRef = useRef(false);
+  const guardandoRef = useRef(false);
 
   useEffect(() => {
-    void cargarReuniones();
-  }, []);
+    formularioRef.current = mostrarFormulario;
+  }, [mostrarFormulario]);
 
-  async function cargarReuniones() {
+  useEffect(() => {
+    guardandoRef.current = guardando;
+  }, [guardando]);
+
+  const cargarReuniones = useCallback(async (silencioso = false) => {
     const token = obtenerToken();
     if (!token) {
       eliminarSesion();
@@ -66,17 +73,46 @@ export default function ReunionesPage() {
       return;
     }
 
-    setCargando(true);
+    if (!silencioso) setCargando(true);
     try {
       setReuniones(await listarReuniones(token));
+      setUltimaActualizacion(new Date());
     } catch (error) {
-      setMensaje(
-        error instanceof Error ? error.message : "No se pudieron cargar las reuniones."
-      );
+      if (!silencioso) {
+        setMensaje(
+          error instanceof Error ? error.message : "No se pudieron cargar las reuniones."
+        );
+      }
     } finally {
-      setCargando(false);
+      if (!silencioso) setCargando(false);
     }
-  }
+  }, [router]);
+
+  useEffect(() => {
+    void cargarReuniones();
+  }, [cargarReuniones]);
+
+  useEffect(() => {
+    const actualizar = () => {
+      if (
+        document.visibilityState === "visible" &&
+        !formularioRef.current &&
+        !guardandoRef.current
+      ) {
+        void cargarReuniones(true);
+      }
+    };
+
+    const intervalo = window.setInterval(actualizar, 10_000);
+    window.addEventListener("focus", actualizar);
+    document.addEventListener("visibilitychange", actualizar);
+
+    return () => {
+      window.clearInterval(intervalo);
+      window.removeEventListener("focus", actualizar);
+      document.removeEventListener("visibilitychange", actualizar);
+    };
+  }, [cargarReuniones]);
 
   function abrirNueva() {
     setFormulario({ ...formularioInicial, fecha: new Date().toISOString().slice(0, 10) });
