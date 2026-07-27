@@ -68,7 +68,7 @@ export default function LoginPage() {
           <AppLogo href="" priority />
           <span className="login-badge">✨ Gestión docente inteligente</span>
           <h1 className="title">
-            Todo tu curso en un espacio <span>mágico</span>
+            Tu Aula Mágica: todos tus registros en <span>un solo lugar</span>
           </h1>
           <p className="subtitle">
             Alumnos, asistencia, notas, planificación, agenda, Telegram y

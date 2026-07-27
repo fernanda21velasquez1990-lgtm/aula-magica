@@ -7,13 +7,11 @@ import {
   listarAlumnos,
   listarAsistencia,
   listarCalificaciones,
-  listarCumpleanos,
   listarPlanificaciones,
   listarReuniones,
   type Alumno,
   type AsistenciaAlumno,
   type Calificacion,
-  type CumpleanosAlumno,
   type EventoAgenda,
   type Planificacion,
   type Reunion,
@@ -25,7 +23,6 @@ type Datos = {
   asistencia: AsistenciaAlumno[];
   calificaciones: Calificacion[];
   planificaciones: Planificacion[];
-  cumpleanos: CumpleanosAlumno[];
   reuniones: Reunion[];
   agenda: EventoAgenda[];
 };
@@ -37,7 +34,6 @@ const VACIO: Datos = {
   asistencia: [],
   calificaciones: [],
   planificaciones: [],
-  cumpleanos: [],
   reuniones: [],
   agenda: [],
 };
@@ -94,6 +90,23 @@ export default function ReportesPage() {
   const [exportando, setExportando] = useState("");
   const [mensaje, setMensaje] = useState("");
 
+  const cargarConReintento = useCallback(
+    async <T,>(operacion: () => Promise<T>): Promise<T> => {
+      try {
+        return await operacion();
+      } catch (primerError) {
+        await new Promise((resolve) => window.setTimeout(resolve, 900));
+
+        try {
+          return await operacion();
+        } catch {
+          throw primerError;
+        }
+      }
+    },
+    []
+  );
+
   const cargar = useCallback(async () => {
     const token = obtenerToken();
 
@@ -107,22 +120,20 @@ export default function ReportesPage() {
     setMensaje("");
 
     try {
-      const [
-        alumnos,
-        asistencia,
-        calificaciones,
-        planificaciones,
-        cumpleanos,
-        reuniones,
-        agenda,
-      ] = await Promise.all([
-        listarAlumnos(token),
-        listarAsistencia(token, fecha),
-        listarCalificaciones(token),
-        listarPlanificaciones(token),
-        listarCumpleanos(token),
-        listarReuniones(token),
-        listarAgenda(token),
+      // Se cargan solo dos módulos a la vez para no saturar Apps Script.
+      const [alumnos, asistencia] = await Promise.all([
+        cargarConReintento(() => listarAlumnos(token)),
+        cargarConReintento(() => listarAsistencia(token, fecha)),
+      ]);
+
+      const [calificaciones, planificaciones] = await Promise.all([
+        cargarConReintento(() => listarCalificaciones(token)),
+        cargarConReintento(() => listarPlanificaciones(token)),
+      ]);
+
+      const [reuniones, agenda] = await Promise.all([
+        cargarConReintento(() => listarReuniones(token)),
+        cargarConReintento(() => listarAgenda(token)),
       ]);
 
       setDatos({
@@ -130,24 +141,23 @@ export default function ReportesPage() {
         asistencia,
         calificaciones,
         planificaciones,
-        cumpleanos,
         reuniones,
         agenda,
       });
 
-      if (!alumnoSeleccionado && alumnos.length) {
-        setAlumnoSeleccionado(alumnos[0].idAlumno);
-      }
+      setAlumnoSeleccionado((actual) =>
+        actual || alumnos[0]?.idAlumno || ""
+      );
     } catch (error) {
       setMensaje(
         error instanceof Error
-          ? error.message
-          : "No se pudieron preparar los reportes."
+          ? `${error.message} Pulsa Actualizar para intentarlo nuevamente.`
+          : "No se pudieron preparar los reportes. Pulsa Actualizar."
       );
     } finally {
       setCargando(false);
     }
-  }, [alumnoSeleccionado, fecha, router]);
+  }, [cargarConReintento, fecha, router]);
 
   useEffect(() => {
     void cargar();
