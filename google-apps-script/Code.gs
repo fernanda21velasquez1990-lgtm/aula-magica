@@ -33,7 +33,9 @@ function onOpen() {
     .addItem('Probar recordatorios ahora', 'probarRecordatoriosAutomaticos')
     .addItem('Desactivar recordatorios', 'desactivarRecordatoriosAutomaticos')
     .addSeparator()
-    .addItem('Crear respaldo', 'crearRespaldo')
+    .addItem('Crear respaldo ahora', 'crearRespaldo')
+    .addItem('Activar respaldo semanal', 'activarRespaldoSemanal')
+    .addItem('Desactivar respaldo automático', 'desactivarRespaldoAutomatico')
     .addToUi();
 }
 
@@ -52,7 +54,7 @@ function crearEstructuraInicial() {
   const config = ss.getSheetByName('CONFIGURACION');
   if (config.getLastRow() < 2) config.getRange(2,1,11,3).setValues([
     ['NOMBRE_APLICACION',APP_NAME,'Nombre mostrado en la plataforma'],
-    ['VERSION','5.4.0','Versión actual'],
+    ['VERSION','6.0.0','Versión actual'],
     ['SESION_HORAS','24','Duración de sesión'],
     ['REGISTRO_PUBLICO','SI','Permitir registro'],
     ['TELEGRAM_ACTIVO','NO','Estado del bot'],
@@ -61,9 +63,24 @@ function crearEstructuraInicial() {
     ['BAUL_TELEFONO','3000000000','Teléfono del pago móvil'],
     ['BAUL_DOCUMENTO','Configurar documento','Documento del titular'],
     ['BAUL_TITULAR','Configurar titular','Nombre del titular'],
-    ['BAUL_MONEDA','COP','Moneda mostrada en Mi Baúl']
+    ['BAUL_MONEDA','COP','Moneda mostrada en Mi Baúl'],
+    ['ADMIN_CORREO','','Correo autorizado para Panel Administrador']
   ]);
-  SpreadsheetApp.getUi().alert('Aula Mágica','La estructura está lista.',SpreadsheetApp.getUi().ButtonSet.OK);
+
+  const registrosConfig=obtenerRegistrosConFila('CONFIGURACION');
+  const filaVersion=registrosConfig.find(r=>
+    String(r.CLAVE||'').trim()==='VERSION'
+  );
+
+  if(filaVersion){
+    config.getRange(filaVersion.__fila,2).setValue('8.0.0');
+  }
+
+  SpreadsheetApp.getUi().alert(
+    'Aula Mágica',
+    'La estructura está lista y actualizada a la versión 8.0.0.',
+    SpreadsheetApp.getUi().ButtonSet.OK
+  );
 }
 
 function doGet() {
@@ -71,7 +88,7 @@ function doGet() {
     ok: true,
     aplicacion: APP_NAME,
     estado: 'API funcionando',
-    version: '5.4.0'
+    version: '8.0.0'
   });
 }
 function doPost(e) {
@@ -103,6 +120,13 @@ function doPost(e) {
       case 'botProbarAvisosTelegram': resultado=botProbarAvisosTelegram(datos); break;
       case 'botListarComprasBaulTelegram': resultado=botListarComprasBaulTelegram(datos); break;
       case 'botObtenerMaterialBaulTelegram': resultado=botObtenerMaterialBaulTelegram(datos); break;
+      case 'adminObtenerPanel': resultado=adminObtenerPanel(token); break;
+      case 'adminCrearMaestra': resultado=adminCrearMaestra(token,datos); break;
+      case 'adminCambiarEstadoMaestra': resultado=adminCambiarEstadoMaestra(token,datos); break;
+      case 'adminRestablecerContrasena': resultado=adminRestablecerContrasena(token,datos); break;
+      case 'adminListarAuditoria': resultado=adminListarAuditoria(token,datos); break;
+      case 'adminCrearRespaldo': resultado=adminCrearRespaldo(token); break;
+      case 'adminActualizarCompra': resultado=adminActualizarCompra(token,datos); break;
       case 'listarCalificaciones': resultado=listarCalificaciones(token); break;
       case 'guardarCalificacion': resultado=guardarCalificacion(token,datos); break;
       case 'eliminarCalificacion': resultado=eliminarCalificacion(token,datos); break;
@@ -216,6 +240,325 @@ function doPost(e) {
 function obtenerSolicitud(e){ if(!e||!e.postData||!e.postData.contents) throw new Error('La solicitud está vacía.'); try{return JSON.parse(e.postData.contents)}catch(_){throw new Error('El contenido no es JSON válido.')} }
 function responderJson(c){ return ContentService.createTextOutput(JSON.stringify(c)).setMimeType(ContentService.MimeType.JSON); }
 
+
+function obtenerConfiguracionValor(clave,valorPorDefecto){
+  const registro=obtenerRegistros('CONFIGURACION').find(r=>
+    String(r.CLAVE||'').trim()===String(clave||'').trim()
+  );
+
+  return registro
+    ?String(registro.VALOR||valorPorDefecto||'').trim()
+    :String(valorPorDefecto||'').trim();
+}
+
+function verificarAdministrador(token){
+  const maestra=verificarSesion(token);
+  const correoAdmin=obtenerConfiguracionValor('ADMIN_CORREO','');
+
+  if(!correoAdmin){
+    throw new Error(
+      'Configura ADMIN_CORREO en la hoja CONFIGURACION.'
+    );
+  }
+
+  if(
+    normalizarCorreo(maestra.correo)!==
+    normalizarCorreo(correoAdmin)
+  ){
+    throw new Error('No tienes permiso para acceder al Panel Administrador.');
+  }
+
+  return maestra;
+}
+
+function adminResumenPorEstado(registros,campo){
+  const resultado={};
+
+  registros.forEach(r=>{
+    const valor=String(r[campo]||'SIN DEFINIR').trim().toUpperCase();
+    resultado[valor]=(resultado[valor]||0)+1;
+  });
+
+  return resultado;
+}
+
+function adminObtenerPanel(token){
+  verificarAdministrador(token);
+
+  const maestras=obtenerRegistros('MAESTRAS').map(r=>({
+    idMaestra:String(r.ID_MAESTRA||''),
+    nombre:String(r.NOMBRE||''),
+    apellido:String(r.APELLIDO||''),
+    correo:String(r.CORREO||''),
+    usuario:String(r.USUARIO||''),
+    grado:String(r.GRADO||''),
+    seccion:String(r.SECCION||''),
+    estado:String(r.ESTADO||'ACTIVA').toUpperCase(),
+    fechaRegistro:formatearFechaParaFormulario(r.FECHA_REGISTRO),
+    ultimoAcceso:r.ULTIMO_ACCESO
+      ?Utilities.formatDate(
+        new Date(r.ULTIMO_ACCESO),
+        obtenerZonaHorariaAulaMagica(),
+        'yyyy-MM-dd HH:mm'
+      )
+      :''
+  })).sort((a,b)=>
+    (a.nombre+' '+a.apellido).localeCompare(b.nombre+' '+b.apellido)
+  );
+
+  const alumnos=obtenerRegistros('ALUMNOS');
+  const asistencia=obtenerRegistros('ASISTENCIA');
+  const calificaciones=obtenerRegistros('CALIFICACIONES');
+  const compras=obtenerRegistros('COMPRAS_BAUL');
+  const telegram=obtenerRegistros('TELEGRAM');
+
+  const alumnosPorMaestra={};
+  alumnos.forEach(r=>{
+    const id=String(r.ID_MAESTRA||'').trim();
+    if(String(r.ESTADO||'').trim().toUpperCase()==='ELIMINADO')return;
+    alumnosPorMaestra[id]=(alumnosPorMaestra[id]||0)+1;
+  });
+
+  const maestrasConTotales=maestras.map(m=>Object.assign({},m,{
+    totalAlumnos:Number(alumnosPorMaestra[m.idMaestra]||0)
+  }));
+
+  const comprasDetalle=compras.map(r=>({
+    idCompra:String(r.ID_COMPRA||''),
+    idMaterial:String(r.ID_MATERIAL||''),
+    idMaestra:String(r.ID_MAESTRA||''),
+    fechaSolicitud:r.FECHA_SOLICITUD
+      ?Utilities.formatDate(
+        new Date(r.FECHA_SOLICITUD),
+        obtenerZonaHorariaAulaMagica(),
+        'yyyy-MM-dd HH:mm'
+      )
+      :'',
+    monto:Number(r.MONTO||0),
+    estado:String(r.ESTADO||'PENDIENTE').toUpperCase(),
+    referencia:String(r.REFERENCIA||''),
+    fechaPago:r.FECHA_PAGO
+      ?Utilities.formatDate(
+        new Date(r.FECHA_PAGO),
+        obtenerZonaHorariaAulaMagica(),
+        'yyyy-MM-dd HH:mm'
+      )
+      :''
+  })).sort((a,b)=>b.fechaSolicitud.localeCompare(a.fechaSolicitud));
+
+  return {
+    estadisticas:{
+      maestras:maestras.length,
+      maestrasActivas:maestras.filter(m=>m.estado==='ACTIVA').length,
+      maestrasBloqueadas:maestras.filter(m=>m.estado!=='ACTIVA').length,
+      alumnos:alumnos.filter(r=>
+        String(r.ESTADO||'').trim().toUpperCase()!=='ELIMINADO'
+      ).length,
+      asistencias:asistencia.length,
+      calificaciones:calificaciones.length,
+      telegramVinculados:telegram.filter(r=>
+        String(r.ESTADO||'').trim().toUpperCase()==='VINCULADO'
+      ).length,
+      ventasPendientes:comprasDetalle.filter(c=>c.estado==='PENDIENTE').length,
+      ventasPagadas:comprasDetalle.filter(c=>c.estado==='PAGADO').length,
+      ingresos:comprasDetalle
+        .filter(c=>c.estado==='PAGADO')
+        .reduce((total,c)=>total+Number(c.monto||0),0)
+    },
+    maestras:maestrasConTotales,
+    compras:comprasDetalle.slice(0,100),
+    telegram:telegram.map(r=>({
+      idMaestra:String(r.ID_MAESTRA||''),
+      chatId:String(r.CHAT_ID||''),
+      estado:String(r.ESTADO||'').toUpperCase(),
+      fechaVinculacion:r.FECHA_VINCULACION
+        ?Utilities.formatDate(
+          new Date(r.FECHA_VINCULACION),
+          obtenerZonaHorariaAulaMagica(),
+          'yyyy-MM-dd HH:mm'
+        )
+        :''
+    }))
+  };
+}
+
+function adminCrearMaestra(token,datos){
+  const admin=verificarAdministrador(token);
+  validarObjeto(datos,['nombre','apellido','correo','contrasena']);
+
+  const creada=registrarMaestra(datos);
+
+  registrarAuditoria(
+    admin.idMaestra,
+    'CREAR',
+    'ADMINISTRACION',
+    'Maestra creada desde Panel Administrador: '+creada.correo
+  );
+
+  return creada;
+}
+
+function adminCambiarEstadoMaestra(token,datos){
+  const admin=verificarAdministrador(token);
+  validarObjeto(datos,['idMaestra','estado']);
+
+  const estado=String(datos.estado||'').trim().toUpperCase();
+
+  if(!['ACTIVA','BLOQUEADA'].includes(estado)){
+    throw new Error('El estado solicitado no es válido.');
+  }
+
+  if(String(datos.idMaestra||'')===String(admin.idMaestra||'')){
+    throw new Error('No puedes bloquear tu propia cuenta administradora.');
+  }
+
+  const registro=obtenerRegistrosConFila('MAESTRAS').find(r=>
+    String(r.ID_MAESTRA||'').trim()===
+    String(datos.idMaestra||'').trim()
+  );
+
+  if(!registro)throw new Error('No se encontró la maestra.');
+
+  obtenerHoja('MAESTRAS')
+    .getRange(registro.__fila,9)
+    .setValue(estado);
+
+  if(estado!=='ACTIVA'){
+    const hojaSesiones=obtenerHoja('SESIONES');
+    obtenerRegistrosConFila('SESIONES')
+      .filter(r=>
+        String(r.ID_MAESTRA||'').trim()===
+        String(datos.idMaestra||'').trim()&&
+        String(r.ESTADO||'').trim().toUpperCase()==='ACTIVA'
+      )
+      .forEach(r=>hojaSesiones.getRange(r.__fila,5).setValue('CERRADA'));
+  }
+
+  registrarAuditoria(
+    admin.idMaestra,
+    'EDITAR',
+    'ADMINISTRACION',
+    'Estado de maestra actualizado a '+estado
+  );
+
+  return {actualizado:true,estado:estado};
+}
+
+function adminRestablecerContrasena(token,datos){
+  const admin=verificarAdministrador(token);
+  validarObjeto(datos,['idMaestra','nuevaContrasena']);
+
+  const nueva=String(datos.nuevaContrasena||'');
+
+  if(nueva.length<6){
+    throw new Error('La contraseña debe tener al menos 6 caracteres.');
+  }
+
+  const registro=obtenerRegistrosConFila('MAESTRAS').find(r=>
+    String(r.ID_MAESTRA||'').trim()===
+    String(datos.idMaestra||'').trim()
+  );
+
+  if(!registro)throw new Error('No se encontró la maestra.');
+
+  obtenerHoja('MAESTRAS')
+    .getRange(registro.__fila,6)
+    .setValue(crearHashContrasena(nueva));
+
+  registrarAuditoria(
+    admin.idMaestra,
+    'EDITAR',
+    'ADMINISTRACION',
+    'Contraseña restablecida para '+String(registro.CORREO||'')
+  );
+
+  return {actualizado:true};
+}
+
+function adminListarAuditoria(token,datos){
+  verificarAdministrador(token);
+
+  const limite=Math.min(
+    300,
+    Math.max(20,Number(datos&&datos.limite||100))
+  );
+
+  return obtenerRegistros('AUDITORIA')
+    .map(r=>({
+      id:String(r.ID||''),
+      idMaestra:String(r.ID_MAESTRA||''),
+      accion:String(r.ACCION||''),
+      modulo:String(r.MODULO||''),
+      detalle:String(r.DETALLE||''),
+      fecha:r.FECHA
+        ?Utilities.formatDate(
+          new Date(r.FECHA),
+          obtenerZonaHorariaAulaMagica(),
+          'yyyy-MM-dd HH:mm:ss'
+        )
+        :'',
+      ip:String(r.IP||'')
+    }))
+    .sort((a,b)=>b.fecha.localeCompare(a.fecha))
+    .slice(0,limite);
+}
+
+function adminCrearRespaldo(token){
+  const admin=verificarAdministrador(token);
+  const copia=crearCopiaRespaldoAulaMagica();
+
+  registrarAuditoria(
+    admin.idMaestra,
+    'CREAR',
+    'RESPALDO',
+    'Respaldo creado desde Panel Administrador: '+copia.getName()
+  );
+
+  return {
+    creado:true,
+    nombre:copia.getName(),
+    id:copia.getId(),
+    url:copia.getUrl()
+  };
+}
+
+function adminActualizarCompra(token,datos){
+  const admin=verificarAdministrador(token);
+  validarObjeto(datos,['idCompra','estado']);
+
+  const estado=String(datos.estado||'').trim().toUpperCase();
+
+  if(!['PENDIENTE','PAGADO','CANCELADO'].includes(estado)){
+    throw new Error('El estado de compra no es válido.');
+  }
+
+  const compra=obtenerRegistrosConFila('COMPRAS_BAUL').find(r=>
+    String(r.ID_COMPRA||'').trim()===
+    String(datos.idCompra||'').trim()
+  );
+
+  if(!compra)throw new Error('No se encontró la compra.');
+
+  const hoja=obtenerHoja('COMPRAS_BAUL');
+
+  hoja.getRange(compra.__fila,6).setValue(estado);
+  hoja.getRange(compra.__fila,7).setValue(
+    limpiarTexto(datos.referencia||compra.REFERENCIA||'')
+  );
+  hoja.getRange(compra.__fila,8).setValue(
+    estado==='PAGADO'?new Date():''
+  );
+
+  registrarAuditoria(
+    admin.idMaestra,
+    'EDITAR',
+    'VENTAS',
+    'Compra '+String(compra.ID_COMPRA||'')+' actualizada a '+estado
+  );
+
+  return {actualizado:true,estado:estado};
+}
+
 function registrarMaestra(datos){
   validarObjeto(datos,['nombre','apellido','correo','contrasena']);
   const nombre=limpiarTexto(datos.nombre), apellido=limpiarTexto(datos.apellido), correo=normalizarCorreo(datos.correo), contrasena=String(datos.contrasena||'');
@@ -249,7 +592,22 @@ function verificarSesion(token){
   if(!m||String(m.ESTADO).toUpperCase()!=='ACTIVA') throw new Error('La cuenta no está disponible.');
   return maestraPublica(m);
 }
-function maestraPublica(m){return {idMaestra:String(m.ID_MAESTRA),nombre:String(m.NOMBRE),apellido:String(m.APELLIDO),correo:String(m.CORREO),usuario:String(m.USUARIO),grado:String(m.GRADO||''),seccion:String(m.SECCION||'')}}
+function maestraPublica(m){
+  const correoAdmin=obtenerConfiguracionValor('ADMIN_CORREO','');
+  return {
+    idMaestra:String(m.ID_MAESTRA),
+    nombre:String(m.NOMBRE),
+    apellido:String(m.APELLIDO),
+    correo:String(m.CORREO),
+    usuario:String(m.USUARIO),
+    grado:String(m.GRADO||''),
+    seccion:String(m.SECCION||''),
+    esAdmin:Boolean(
+      correoAdmin&&
+      normalizarCorreo(m.CORREO)===normalizarCorreo(correoAdmin)
+    )
+  };
+}
 function cerrarSesion(token){ const h=obtenerHoja('SESIONES'), r=obtenerRegistrosConFila('SESIONES').find(x=>String(x.TOKEN)===String(token)); if(r) h.getRange(r.__fila,5).setValue('CERRADA'); return {cerrado:true}; }
 
 function crearAlumno(token,datos){
@@ -921,7 +1279,99 @@ function normalizarFechaCalificacion(valor){
 function mostrarFormularioMaestra(){ SpreadsheetApp.getUi().alert('Las maestras pueden registrarse desde la plataforma web.'); }
 function mostrarResumen(){ const ss=SpreadsheetApp.getActiveSpreadsheet(); SpreadsheetApp.getUi().alert('Resumen','Maestras: '+contarRegistros(ss,'MAESTRAS')+'\nAlumnos: '+contarRegistros(ss,'ALUMNOS'),SpreadsheetApp.getUi().ButtonSet.OK); }
 function contarRegistros(ss,n){const h=ss.getSheetByName(n);return h?Math.max(h.getLastRow()-1,0):0}
-function crearRespaldo(){const f=DriveApp.getFileById(SpreadsheetApp.getActiveSpreadsheet().getId());const fecha=Utilities.formatDate(new Date(),Session.getScriptTimeZone(),'yyyy-MM-dd_HH-mm');f.makeCopy('Respaldo Aula Mágica '+fecha);SpreadsheetApp.getUi().alert('Respaldo creado correctamente.');}
+function obtenerCarpetaRespaldosAulaMagica(){
+  const propiedades=PropertiesService.getScriptProperties();
+  const idGuardado=propiedades.getProperty('CARPETA_RESPALDOS_AULA_MAGICA');
+
+  if(idGuardado){
+    try{
+      return DriveApp.getFolderById(idGuardado);
+    }catch(_){
+      propiedades.deleteProperty('CARPETA_RESPALDOS_AULA_MAGICA');
+    }
+  }
+
+  const carpeta=DriveApp.createFolder('Respaldos Aula Mágica');
+  propiedades.setProperty(
+    'CARPETA_RESPALDOS_AULA_MAGICA',
+    carpeta.getId()
+  );
+
+  return carpeta;
+}
+
+function crearCopiaRespaldoAulaMagica(){
+  const archivo=DriveApp.getFileById(
+    SpreadsheetApp.getActiveSpreadsheet().getId()
+  );
+
+  const fecha=Utilities.formatDate(
+    new Date(),
+    obtenerZonaHorariaAulaMagica(),
+    'yyyy-MM-dd_HH-mm'
+  );
+
+  return archivo.makeCopy(
+    'Respaldo Aula Mágica '+fecha,
+    obtenerCarpetaRespaldosAulaMagica()
+  );
+}
+
+function crearRespaldo(){
+  const copia=crearCopiaRespaldoAulaMagica();
+
+  SpreadsheetApp.getUi().alert(
+    'Respaldo creado',
+    'Se guardó correctamente: '+copia.getName(),
+    SpreadsheetApp.getUi().ButtonSet.OK
+  );
+}
+
+function crearRespaldoAutomatico(){
+  const copia=crearCopiaRespaldoAulaMagica();
+
+  console.log('Respaldo automático creado: '+copia.getName());
+
+  return {
+    creado:true,
+    nombre:copia.getName(),
+    id:copia.getId()
+  };
+}
+
+function activarRespaldoSemanal(){
+  const funcion='crearRespaldoAutomatico';
+
+  ScriptApp.getProjectTriggers()
+    .filter(trigger=>trigger.getHandlerFunction()===funcion)
+    .forEach(trigger=>ScriptApp.deleteTrigger(trigger));
+
+  ScriptApp.newTrigger(funcion)
+    .timeBased()
+    .onWeekDay(ScriptApp.WeekDay.MONDAY)
+    .atHour(2)
+    .create();
+
+  SpreadsheetApp.getUi().alert(
+    'Respaldo semanal activado',
+    'Cada lunes se creará automáticamente una copia en la carpeta Respaldos Aula Mágica.',
+    SpreadsheetApp.getUi().ButtonSet.OK
+  );
+}
+
+function desactivarRespaldoAutomatico(){
+  const funcion='crearRespaldoAutomatico';
+
+  ScriptApp.getProjectTriggers()
+    .filter(trigger=>trigger.getHandlerFunction()===funcion)
+    .forEach(trigger=>ScriptApp.deleteTrigger(trigger));
+
+  SpreadsheetApp.getUi().alert(
+    'Respaldo automático desactivado',
+    'No se crearán nuevas copias semanales.',
+    SpreadsheetApp.getUi().ButtonSet.OK
+  );
+}
 function generarId(p){return p+'-'+Utilities.getUuid().replace(/-/g,'').substring(0,10).toUpperCase()}
 function crearHashContrasena(c){const bytes=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,obtenerSaltAplicacion()+':'+c,Utilities.Charset.UTF_8);return bytes.map(b=>{const v=b<0?b+256:b;return v.toString(16).padStart(2,'0')}).join('')}
 function obtenerSaltAplicacion(){const p=PropertiesService.getScriptProperties();let s=p.getProperty('PASSWORD_SALT');if(!s){s=Utilities.getUuid()+Utilities.getUuid();p.setProperty('PASSWORD_SALT',s)}return s}

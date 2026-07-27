@@ -49,6 +49,7 @@ export type Maestra = {
   usuario: string;
   grado?: string;
   seccion?: string;
+  esAdmin?: boolean;
 };
 
 export type ResultadoLogin = {
@@ -580,5 +581,146 @@ export async function solicitarCompraBaul(
     action: "solicitarCompraBaul",
     token,
     data: { idMaterial },
+  });
+}
+
+
+export type AdminEstadisticas = {
+  maestras: number;
+  maestrasActivas: number;
+  maestrasBloqueadas: number;
+  alumnos: number;
+  asistencias: number;
+  calificaciones: number;
+  telegramVinculados: number;
+  ventasPendientes: number;
+  ventasPagadas: number;
+  ingresos: number;
+};
+
+export type AdminMaestra = Maestra & {
+  estado: string;
+  fechaRegistro: string;
+  ultimoAcceso: string;
+  totalAlumnos: number;
+};
+
+export type AdminCompra = {
+  idCompra: string;
+  idMaterial: string;
+  idMaestra: string;
+  fechaSolicitud: string;
+  monto: number;
+  estado: string;
+  referencia: string;
+  fechaPago: string;
+};
+
+export type AdminTelegram = {
+  idMaestra: string;
+  chatId: string;
+  estado: string;
+  fechaVinculacion: string;
+};
+
+export type AdminPanel = {
+  estadisticas: AdminEstadisticas;
+  maestras: AdminMaestra[];
+  compras: AdminCompra[];
+  telegram: AdminTelegram[];
+};
+
+export type AdminAuditoria = {
+  id: string;
+  idMaestra: string;
+  accion: string;
+  modulo: string;
+  detalle: string;
+  fecha: string;
+  ip: string;
+};
+
+export async function adminObtenerPanel(token: string) {
+  return llamarAppsScript<AdminPanel>({
+    action: "adminObtenerPanel",
+    token,
+  });
+}
+
+export async function adminCrearMaestra(
+  token: string,
+  datos: {
+    nombre: string;
+    apellido: string;
+    correo: string;
+    contrasena: string;
+    grado?: string;
+    seccion?: string;
+  }
+) {
+  return llamarAppsScript<Maestra>({
+    action: "adminCrearMaestra",
+    token,
+    data: datos,
+  });
+}
+
+export async function adminCambiarEstadoMaestra(
+  token: string,
+  idMaestra: string,
+  estado: "ACTIVA" | "BLOQUEADA"
+) {
+  return llamarAppsScript<{ actualizado: boolean; estado: string }>({
+    action: "adminCambiarEstadoMaestra",
+    token,
+    data: { idMaestra, estado },
+  });
+}
+
+export async function adminRestablecerContrasena(
+  token: string,
+  idMaestra: string,
+  nuevaContrasena: string
+) {
+  return llamarAppsScript<{ actualizado: boolean }>({
+    action: "adminRestablecerContrasena",
+    token,
+    data: { idMaestra, nuevaContrasena },
+  });
+}
+
+export async function adminListarAuditoria(
+  token: string,
+  limite = 100
+) {
+  return llamarAppsScript<AdminAuditoria[]>({
+    action: "adminListarAuditoria",
+    token,
+    data: { limite },
+  });
+}
+
+export async function adminCrearRespaldo(token: string) {
+  return llamarAppsScript<{
+    creado: boolean;
+    nombre: string;
+    id: string;
+    url: string;
+  }>({
+    action: "adminCrearRespaldo",
+    token,
+  });
+}
+
+export async function adminActualizarCompra(
+  token: string,
+  idCompra: string,
+  estado: "PENDIENTE" | "PAGADO" | "CANCELADO",
+  referencia = ""
+) {
+  return llamarAppsScript<{ actualizado: boolean; estado: string }>({
+    action: "adminActualizarCompra",
+    token,
+    data: { idCompra, estado, referencia },
   });
 }

@@ -12,12 +12,14 @@ import {
   PackageOpen,
   Send,
   Settings,
+  ShieldCheck,
   Users,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import AppLogo from "./AppLogo";
 import ThemeToggle from "./ThemeToggle";
+import { obtenerMaestra } from "@/lib/session";
 
 const items = [
   ["/dashboard", "Inicio", LayoutDashboard],
@@ -36,6 +38,7 @@ const items = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const maestra = obtenerMaestra();
 
   return (
     <aside className="sidebar">
@@ -63,11 +66,26 @@ export default function Sidebar() {
             </Link>
           );
         })}
+        {maestra?.esAdmin && (
+          <Link
+            href="/dashboard/admin"
+            className={
+              pathname.startsWith("/dashboard/admin") ? "active admin-link" : "admin-link"
+            }
+            aria-current={
+              pathname.startsWith("/dashboard/admin") ? "page" : undefined
+            }
+            title="Panel Administrador"
+          >
+            <ShieldCheck size={21} aria-hidden="true" />
+            <span>Administrador</span>
+          </Link>
+        )}
       </nav>
 
       <div className="sidebar-footer">
         <ThemeToggle />
-        <small>Versión profesional 6.0.1</small>
+        <small>Versión profesional 8.0</small>
       </div>
     </aside>
   );
