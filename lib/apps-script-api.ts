@@ -909,7 +909,7 @@ export async function adminCambiarEstadoSuscripcion(token:string,datos:{idLicenc
 }
 export async function adminRegistrarPagoSuscripcion(token:string,datos:{
   idMaestra:string;idLicencia:string;idPlan:string;monto:number;moneda:string;metodo?:string;
-  referencia?:string;fechaPago?:string;notas?:string;
+  referencia?:string;fechaPago?:string;notas?:string;renovarLicencia?:boolean;
 }){
   return llamarAppsScript<{guardado:boolean;idPago:string}>({action:"adminRegistrarPagoSuscripcion",token,data:datos});
 }
@@ -926,6 +926,40 @@ export async function adminGuardarLimitesPlan(
   }>({
     action: "adminGuardarLimitesPlan",
     token,
+    data: datos,
+  });
+}
+
+
+export async function adminGenerarActivacionCuenta(
+  token: string,
+  datos: { idMaestra: string; idPlan: string }
+) {
+  return llamarAppsScript<{
+    idActivacion: string;
+    codigo: string;
+    correo: string;
+    nombre: string;
+    plan: string;
+    venceEnHoras: number;
+  }>({
+    action: "adminGenerarActivacionCuenta",
+    token,
+    data: datos,
+  });
+}
+
+export async function activarCuentaConCodigo(datos: {
+  correo: string;
+  codigo: string;
+  contrasena: string;
+}) {
+  return llamarAppsScript<{
+    activada: boolean;
+    plan: string;
+    fechaVencimiento: string;
+  }>({
+    action: "activarCuentaConCodigo",
     data: datos,
   });
 }

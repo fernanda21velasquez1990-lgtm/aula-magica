@@ -18,9 +18,10 @@ const SHEETS = {
   CALENDARIO_ESCOLAR: ['ID_CALENDARIO','ID_MAESTRA','TITULO','TIPO','FECHA_INICIO','FECHA_FIN','HORA','LUGAR','DESCRIPCION','RECORDATORIO','ESTADO','FECHA_REGISTRO'],
   HORARIO_SEMANAL: ['ID_HORARIO','ID_MAESTRA','DIA','HORA_INICIO','HORA_FIN','ASIGNATURA','GRADO','SECCION','AULA','COLOR','NOTAS','ESTADO'],
   EXPEDIENTES_ALUMNOS: ['ID_EXPEDIENTE','ID_MAESTRA','ID_ALUMNO','FOTO','FIRMA_MAESTRA','FIRMA_REPRESENTANTE','ALERGIAS','CONDICIONES_MEDICAS','CONTACTO_EMERGENCIA','TELEFONO_EMERGENCIA','AUTORIZACIONES','NOTAS_PRIVADAS','FECHA_ACTUALIZACION'],
-  PLANES_PLATAFORMA: ['ID_PLAN','NOMBRE','DURACION_DIAS','PRECIO_USD','PRECIO_VES','ESTADO','DESCRIPCION'],
+  PLANES_PLATAFORMA: ['ID_PLAN','NOMBRE','DURACION_DIAS','PRECIO_USD','PRECIO_VES','LIMITE_ALUMNOS','ESTADO','DESCRIPCION'],
   LICENCIAS: ['ID_LICENCIA','ID_MAESTRA','ID_PLAN','FECHA_INICIO','FECHA_VENCIMIENTO','ESTADO','FECHA_ACTUALIZACION'],
   PAGOS_SUSCRIPCIONES: ['ID_PAGO','ID_MAESTRA','ID_LICENCIA','ID_PLAN','MONTO','MONEDA','METODO','REFERENCIA','ESTADO','FECHA_PAGO','NOTAS'],
+  ACTIVACIONES_CUENTAS: ['ID_ACTIVACION','ID_MAESTRA','CODIGO','ID_PLAN','ESTADO','FECHA_CREACION','FECHA_EXPIRACION','FECHA_ACTIVACION'],
   AUDITORIA: ['ID','ID_MAESTRA','ACCION','MODULO','DETALLE','FECHA','IP']
 };
 
@@ -79,7 +80,7 @@ function crearEstructuraInicial() {
   );
 
   if(filaVersion){
-    config.getRange(filaVersion.__fila,2).setValue('10.0.1');
+    config.getRange(filaVersion.__fila,2).setValue('10.2.0');
   }
 
   SpreadsheetApp.getUi().alert(
@@ -94,7 +95,7 @@ function doGet() {
     ok: true,
     aplicacion: APP_NAME,
     estado: 'API funcionando',
-    version: '10.0.1'
+    version: '10.2.0'
   });
 }
 function doPost(e) {
@@ -145,6 +146,9 @@ function doPost(e) {
       case 'adminActivarSuscripcion': resultado=adminActivarSuscripcion(token,datos); break;
       case 'adminCambiarEstadoSuscripcion': resultado=adminCambiarEstadoSuscripcion(token,datos); break;
       case 'adminRegistrarPagoSuscripcion': resultado=adminRegistrarPagoSuscripcion(token,datos); break;
+      case 'adminGuardarLimitesPlan': resultado=adminGuardarLimitesPlan(token,datos); break;
+      case 'adminGenerarActivacionCuenta': resultado=adminGenerarActivacionCuenta(token,datos); break;
+      case 'activarCuentaConCodigo': resultado=activarCuentaConCodigo(datos); break;
       case 'listarCalificaciones': resultado=listarCalificaciones(token); break;
       case 'guardarCalificacion': resultado=guardarCalificacion(token,datos); break;
       case 'eliminarCalificacion': resultado=eliminarCalificacion(token,datos); break;
@@ -1088,19 +1092,45 @@ function asegurarPlanesPlataforma(){
   const hoja=obtenerHoja('PLANES_PLATAFORMA');
   const encabezados=[
     'ID_PLAN','NOMBRE','DURACION_DIAS','PRECIO_USD',
-    'PRECIO_VES','ESTADO','DESCRIPCION'
+    'PRECIO_VES','LIMITE_ALUMNOS','ESTADO','DESCRIPCION'
   ];
 
   hoja.getRange(1,1,1,encabezados.length).setValues([encabezados]);
 
-  if(hoja.getLastRow()>1)return;
+  if(hoja.getLastRow()===1){
+    hoja.getRange(2,1,4,8).setValues([
+      ['PLAN_MENSUAL','Mensual',30,10,0,40,'ACTIVO','Acceso por 30 días'],
+      ['PLAN_TRIMESTRAL','Trimestral',90,25,0,80,'ACTIVO','Acceso por 90 días'],
+      ['PLAN_ANUAL','Anual',365,80,0,120,'ACTIVO','Acceso por 365 días'],
+      ['PLAN_PRUEBA','Prueba',30,0,0,10,'ACTIVO','Prueba inicial']
+    ]);
+    return;
+  }
 
-  hoja.getRange(2,1,4,7).setValues([
-    ['PLAN_MENSUAL','Mensual',30,10,0,'ACTIVO','Acceso por 30 días'],
-    ['PLAN_TRIMESTRAL','Trimestral',90,25,0,'ACTIVO','Acceso por 90 días'],
-    ['PLAN_ANUAL','Anual',365,80,0,'ACTIVO','Acceso por 365 días'],
-    ['PLAN_PRUEBA','Prueba',30,0,0,'ACTIVO','Prueba inicial']
-  ]);
+  const ultimaFila=hoja.getLastRow();
+  const registros=hoja.getRange(2,1,ultimaFila-1,8).getValues();
+
+  registros.forEach((fila,indice)=>{
+    const id=String(fila[0]||'').trim();
+    const limiteActual=fila[5];
+
+    if(
+      limiteActual===''||
+      limiteActual===null||
+      typeof limiteActual==='undefined'
+    ){
+      const limite=
+        id==='PLAN_PRUEBA'?10:
+        id==='PLAN_MENSUAL'?40:
+        id==='PLAN_TRIMESTRAL'?80:
+        id==='PLAN_ANUAL'?120:
+        40;
+
+      hoja.getRange(indice+2,6).setValue(limite);
+    }
+
+    if(!fila[6])hoja.getRange(indice+2,7).setValue('ACTIVO');
+  });
 }
 
 function asegurarLicencia(idMaestra){
@@ -1143,6 +1173,365 @@ function licenciaPublica(r){
   };
 }
 
+
+function obtenerLicenciaMaestraPorId(idMaestra){
+  asegurarPlanesPlataforma();
+  return asegurarLicencia(idMaestra);
+}
+
+function obtenerEstadoAccesoSuscripcion(idMaestra){
+  const licencia=obtenerLicenciaMaestraPorId(idMaestra);
+  const informacion=licenciaPublica(licencia);
+
+  return {
+    permitido:informacion.estado==='ACTIVA'||
+      informacion.estado==='POR_VENCER',
+    licencia:informacion
+  };
+}
+
+function mensajePagoSuscripcion(idMaestra){
+  const acceso=obtenerEstadoAccesoSuscripcion(idMaestra);
+  const licencia=acceso.licencia;
+  const plan=obtenerRegistros('PLANES_PLATAFORMA').find(r=>
+    String(r.ID_PLAN||'')===String(licencia.idPlan||'')
+  )||{};
+
+  const precioUsd=Number(plan.PRECIO_USD||0);
+  const precioVes=Number(plan.PRECIO_VES||0);
+
+  return [
+    '🔒 SUSCRIPCIÓN VENCIDA',
+    '',
+    'Tu plan '+String(licencia.plan||'')+
+      ' venció el '+String(licencia.fechaVencimiento||'')+'.',
+    '',
+    'Para continuar usando Aula Mágica debes renovar tu suscripción.',
+    '',
+    'Precio del plan:',
+    '💵 USD: '+precioUsd,
+    '🇻🇪 VES: '+precioVes,
+    '',
+    'Comunícate con el administrador y envía el comprobante de pago.',
+    '',
+    'Mientras la suscripción esté vencida no podrás usar la plataforma ni el bot de Telegram.'
+  ].join('\n');
+}
+
+function validarAccesoPorSuscripcion(registroMaestra){
+  const correoPropietario='wilmarvelasquez1783@gmail.com';
+  const correo=normalizarCorreo(registroMaestra.CORREO);
+
+  if(correo===normalizarCorreo(correoPropietario)){
+    return true;
+  }
+
+  const acceso=obtenerEstadoAccesoSuscripcion(
+    registroMaestra.ID_MAESTRA
+  );
+
+  if(!acceso.permitido){
+    throw new Error(
+      'SUSCRIPCION_REQUERIDA:'+
+      mensajePagoSuscripcion(registroMaestra.ID_MAESTRA)
+    );
+  }
+
+  return true;
+}
+
+function validarAccesoTelegramPorSuscripcion(idMaestra){
+  const maestra=obtenerRegistros('MAESTRAS').find(r=>
+    String(r.ID_MAESTRA||'')===String(idMaestra||'')
+  );
+
+  if(!maestra){
+    throw new Error('No se encontró la cuenta vinculada.');
+  }
+
+  validarAccesoPorSuscripcion(maestra);
+  return true;
+}
+
+
+function obtenerLimiteAlumnosMaestra(idMaestra){
+  const licencia=asegurarLicencia(idMaestra);
+  const plan=obtenerRegistros('PLANES_PLATAFORMA').find(r=>
+    String(r.ID_PLAN||'')===String(licencia.ID_PLAN||'')
+  );
+
+  if(!plan){
+    throw new Error('No se encontró el plan asignado a la cuenta.');
+  }
+
+  const limite=Number(plan.LIMITE_ALUMNOS||0);
+
+  return {
+    idPlan:String(plan.ID_PLAN||''),
+    nombrePlan:String(plan.NOMBRE||'Plan'),
+    limite:limite,
+    ilimitado:limite<0
+  };
+}
+
+function contarAlumnosActivosMaestra(idMaestra){
+  return obtenerRegistros('ALUMNOS').filter(r=>
+    String(r.ID_MAESTRA||'')===String(idMaestra||'')&&
+    String(r.ESTADO||'ACTIVO').toUpperCase()!=='ELIMINADO'
+  ).length;
+}
+
+function validarLimiteAlumnosPlan(idMaestra){
+  const configuracion=obtenerLimiteAlumnosMaestra(idMaestra);
+  const usados=contarAlumnosActivosMaestra(idMaestra);
+
+  if(configuracion.ilimitado){
+    return {
+      permitido:true,
+      usados:usados,
+      limite:-1,
+      nombrePlan:configuracion.nombrePlan
+    };
+  }
+
+  if(usados>=configuracion.limite){
+    throw new Error(
+      'LIMITE_PLAN:Has alcanzado el límite de '+
+      configuracion.limite+' alumnos permitido por tu plan '+
+      configuracion.nombrePlan+'. Actualmente tienes '+
+      usados+' alumnos registrados. Para agregar otro alumno, debes cambiar a un plan con mayor capacidad. Comunícate con el administrador.'
+    );
+  }
+
+  return {
+    permitido:true,
+    usados:usados,
+    limite:configuracion.limite,
+    disponibles:configuracion.limite-usados,
+    nombrePlan:configuracion.nombrePlan
+  };
+}
+
+function adminGuardarLimitesPlan(token,datos){
+  const admin=verificarAdministrador(token);
+  validarObjeto(datos,['idPlan','limiteAlumnos']);
+
+  const plan=obtenerRegistrosConFila('PLANES_PLATAFORMA').find(r=>
+    String(r.ID_PLAN||'')===String(datos.idPlan||'')
+  );
+
+  if(!plan)throw new Error('No se encontró el plan.');
+
+  const limite=Number(datos.limiteAlumnos);
+
+  if(!Number.isFinite(limite)||limite===0||limite<-1){
+    throw new Error(
+      'El límite debe ser un número mayor que 0, o -1 para ilimitado.'
+    );
+  }
+
+  obtenerHoja('PLANES_PLATAFORMA')
+    .getRange(plan.__fila,6)
+    .setValue(limite);
+
+  registrarAuditoria(
+    admin.idMaestra,
+    'CONFIGURAR_LIMITE',
+    'PLANES_PLATAFORMA',
+    String(plan.NOMBRE||plan.ID_PLAN)+
+      ': '+(limite<0?'Ilimitado':limite+' alumnos')
+  );
+
+  return {
+    guardado:true,
+    idPlan:String(datos.idPlan),
+    limiteAlumnos:limite
+  };
+}
+
+
+function generarCodigoActivacion(){
+  return String(Math.floor(100000+Math.random()*900000));
+}
+
+function adminGenerarActivacionCuenta(token,datos){
+  const admin=verificarAdministrador(token);
+  validarObjeto(datos,['idMaestra','idPlan']);
+
+  const maestra=obtenerRegistrosConFila('MAESTRAS').find(r=>
+    String(r.ID_MAESTRA||'')===String(datos.idMaestra||'')
+  );
+
+  if(!maestra)throw new Error('No se encontró la maestra.');
+
+  const plan=obtenerRegistros('PLANES_PLATAFORMA').find(r=>
+    String(r.ID_PLAN||'')===String(datos.idPlan||'')&&
+    String(r.ESTADO||'ACTIVO').toUpperCase()==='ACTIVO'
+  );
+
+  if(!plan)throw new Error('No se encontró el plan seleccionado.');
+
+  const codigo=generarCodigoActivacion();
+  const fechaCreacion=new Date();
+  const fechaExpiracion=new Date(fechaCreacion.getTime()+72*3600000);
+  const id=generarId('ACT');
+
+  obtenerRegistrosConFila('ACTIVACIONES_CUENTAS')
+    .filter(r=>
+      String(r.ID_MAESTRA||'')===String(datos.idMaestra||'')&&
+      String(r.ESTADO||'').toUpperCase()==='PENDIENTE'
+    )
+    .reverse()
+    .forEach(r=>
+      obtenerHoja('ACTIVACIONES_CUENTAS')
+        .getRange(r.__fila,5)
+        .setValue('REEMPLAZADA')
+    );
+
+  obtenerHoja('ACTIVACIONES_CUENTAS').appendRow([
+    id,
+    String(datos.idMaestra),
+    codigo,
+    String(datos.idPlan),
+    'PENDIENTE',
+    fechaCreacion,
+    fechaExpiracion,
+    ''
+  ]);
+
+  obtenerHoja('MAESTRAS')
+    .getRange(maestra.__fila,9)
+    .setValue('PENDIENTE');
+
+  registrarAuditoria(
+    admin.idMaestra,
+    'GENERAR_ACTIVACION',
+    'ACTIVACIONES_CUENTAS',
+    'Código generado para '+String(maestra.CORREO||'')
+  );
+
+  return {
+    idActivacion:id,
+    codigo:codigo,
+    correo:String(maestra.CORREO||''),
+    nombre:(
+      String(maestra.NOMBRE||'')+' '+String(maestra.APELLIDO||'')
+    ).trim(),
+    plan:String(plan.NOMBRE||''),
+    venceEnHoras:72
+  };
+}
+
+function activarCuentaConCodigo(datos){
+  validarObjeto(datos,['correo','codigo','contrasena']);
+
+  const correo=normalizarCorreo(datos.correo);
+  const codigo=String(datos.codigo||'').trim();
+  const contrasena=String(datos.contrasena||'');
+
+  if(contrasena.length<6){
+    throw new Error('La contraseña debe tener al menos seis caracteres.');
+  }
+
+  const maestra=obtenerRegistrosConFila('MAESTRAS').find(r=>
+    normalizarCorreo(r.CORREO)===correo
+  );
+
+  if(!maestra){
+    throw new Error('No se encontró una cuenta con ese correo.');
+  }
+
+  const activacion=obtenerRegistrosConFila('ACTIVACIONES_CUENTAS')
+    .filter(r=>
+      String(r.ID_MAESTRA||'')===String(maestra.ID_MAESTRA||'')&&
+      String(r.CODIGO||'').trim()===codigo&&
+      String(r.ESTADO||'').toUpperCase()==='PENDIENTE'
+    )
+    .sort((a,b)=>b.__fila-a.__fila)[0];
+
+  if(!activacion){
+    throw new Error('El código es incorrecto o ya fue utilizado.');
+  }
+
+  if(new Date(activacion.FECHA_EXPIRACION).getTime()<Date.now()){
+    obtenerHoja('ACTIVACIONES_CUENTAS')
+      .getRange(activacion.__fila,5)
+      .setValue('VENCIDA');
+    throw new Error(
+      'El código venció. Solicita uno nuevo al administrador.'
+    );
+  }
+
+  const plan=obtenerRegistros('PLANES_PLATAFORMA').find(r=>
+    String(r.ID_PLAN||'')===String(activacion.ID_PLAN||'')
+  );
+
+  if(!plan)throw new Error('El plan de activación no está disponible.');
+
+  const inicio=Utilities.formatDate(
+    new Date(),
+    obtenerZonaHorariaAulaMagica(),
+    'yyyy-MM-dd'
+  );
+  const vencimiento=sumarDiasSuscripcion(
+    inicio,
+    Number(plan.DURACION_DIAS||30)
+  );
+
+  obtenerHoja('MAESTRAS').getRange(
+    maestra.__fila,
+    6,
+    1,
+    4
+  ).setValues([[
+    crearHashContrasena(contrasena),
+    String(maestra.GRADO||''),
+    String(maestra.SECCION||''),
+    'ACTIVA'
+  ]]);
+
+  const licencia=asegurarLicencia(maestra.ID_MAESTRA);
+  obtenerHoja('LICENCIAS').getRange(
+    licencia.__fila,
+    1,
+    1,
+    7
+  ).setValues([[
+    String(licencia.ID_LICENCIA),
+    String(maestra.ID_MAESTRA),
+    String(plan.ID_PLAN),
+    inicio,
+    vencimiento,
+    'ACTIVA',
+    new Date()
+  ]]);
+
+  obtenerHoja('ACTIVACIONES_CUENTAS').getRange(
+    activacion.__fila,
+    5,
+    1,
+    4
+  ).setValues([[
+    'UTILIZADA',
+    activacion.FECHA_CREACION,
+    activacion.FECHA_EXPIRACION,
+    new Date()
+  ]]);
+
+  registrarAuditoria(
+    maestra.ID_MAESTRA,
+    'ACTIVAR_CUENTA',
+    'ACTIVACIONES_CUENTAS',
+    'Cuenta activada con plan '+String(plan.NOMBRE||plan.ID_PLAN)
+  );
+
+  return {
+    activada:true,
+    plan:String(plan.NOMBRE||''),
+    fechaVencimiento:vencimiento
+  };
+}
+
 function adminObtenerSuscripciones(token){
   verificarAdministrador(token);
   asegurarPlanesPlataforma();
@@ -1163,6 +1552,7 @@ function adminObtenerSuscripciones(token){
     duracionDias:Number(r.DURACION_DIAS||0),
     precioUsd:Number(r.PRECIO_USD||0),
     precioVes:Number(r.PRECIO_VES||0),
+    limiteAlumnos:Number(r.LIMITE_ALUMNOS||0),
     estado:String(r.ESTADO||'ACTIVO'),
     descripcion:String(r.DESCRIPCION||'')
   }));
@@ -1250,9 +1640,26 @@ function adminRegistrarPagoSuscripcion(token,datos){
     fechaSuscripcion(datos.fechaPago)||fechaSuscripcion(new Date()),
     limpiarTexto(datos.notas||'')
   ]);
+
+  let renovacion=null;
+
+  if(datos.renovarLicencia!==false){
+    renovacion=adminActivarSuscripcion(token,{
+      idMaestra:String(datos.idMaestra),
+      idPlan:String(datos.idPlan),
+      extender:true
+    });
+  }
+
   registrarAuditoria(admin.idMaestra,'REGISTRAR_PAGO','PAGOS_SUSCRIPCIONES',
     'Pago '+String(datos.monto));
-  return {guardado:true,idPago:id};
+
+  return {
+    guardado:true,
+    idPago:id,
+    renovada:Boolean(renovacion),
+    vencimiento:renovacion?String(renovacion.vencimiento||''):''
+  };
 }
 
 function registrarMaestra(datos){
@@ -1272,6 +1679,7 @@ function iniciarSesion(datos){
   const correo=normalizarCorreo(datos.correo), registros=obtenerRegistros('MAESTRAS'), indice=registros.findIndex(r=>normalizarCorreo(r.CORREO)===correo);
   if(indice===-1) throw new Error('Correo o contraseña incorrectos.');
   const m=registros[indice]; if(String(m.ESTADO).toUpperCase()!=='ACTIVA') throw new Error('Esta cuenta está desactivada.');
+  validarAccesoPorSuscripcion(m);
   if(crearHashContrasena(String(datos.contrasena||''))!==String(m.CONTRASENA_HASH)) throw new Error('Correo o contraseña incorrectos.');
   const token=crearTokenSesion(), inicio=new Date(), fin=new Date(inicio.getTime()+DURACION_SESION_HORAS*3600000);
   obtenerHoja('SESIONES').appendRow([token,m.ID_MAESTRA,inicio,fin,'ACTIVA']);
@@ -1286,6 +1694,7 @@ function verificarSesion(token){
   if(new Date(s.FECHA_EXPIRACION).getTime()<Date.now()){cerrarSesion(token);throw new Error('La sesión ha vencido.');}
   const m=obtenerRegistros('MAESTRAS').find(r=>String(r.ID_MAESTRA)===String(s.ID_MAESTRA));
   if(!m||String(m.ESTADO).toUpperCase()!=='ACTIVA') throw new Error('La cuenta no está disponible.');
+  validarAccesoPorSuscripcion(m);
   return maestraPublica(m);
 }
 function maestraPublica(m){
@@ -1313,7 +1722,9 @@ function maestraPublica(m){
 function cerrarSesion(token){ const h=obtenerHoja('SESIONES'), r=obtenerRegistrosConFila('SESIONES').find(x=>String(x.TOKEN)===String(token)); if(r) h.getRange(r.__fila,5).setValue('CERRADA'); return {cerrado:true}; }
 
 function crearAlumno(token,datos){
-  const m=verificarSesion(token); validarObjeto(datos,['nombre','apellido']);
+  const m=verificarSesion(token);
+  validarObjeto(datos,['nombre','apellido']);
+  validarLimiteAlumnosPlan(m.idMaestra);
   const a={idAlumno:generarId('ALU'),idMaestra:m.idMaestra,nombre:limpiarTexto(datos.nombre),apellido:limpiarTexto(datos.apellido),documento:limpiarTexto(datos.documento||''),fechaNacimiento:limpiarTexto(datos.fechaNacimiento||''),sexo:limpiarTexto(datos.sexo||''),grado:limpiarTexto(datos.grado||m.grado||''),seccion:limpiarTexto(datos.seccion||m.seccion||''),representante:limpiarTexto(datos.representante||''),telefono:limpiarTexto(datos.telefono||''),direccion:limpiarTexto(datos.direccion||''),observaciones:limpiarTexto(datos.observaciones||''),estado:'ACTIVO',fechaRegistro:new Date()};
   obtenerHoja('ALUMNOS').appendRow([a.idAlumno,a.idMaestra,a.nombre,a.apellido,a.documento,a.fechaNacimiento,a.sexo,a.grado,a.seccion,a.representante,a.telefono,a.direccion,a.observaciones,a.estado,a.fechaRegistro]);
   registrarAuditoria(m.idMaestra,'CREAR','ALUMNOS','Alumno creado: '+a.nombre+' '+a.apellido); return a;
@@ -3393,6 +3804,8 @@ function obtenerMaestraTelegramVercel(datos){
     );
   }
 
+  validarAccesoTelegramPorSuscripcion(enlace.ID_MAESTRA);
+
   return {
     chatId:chatId,
     idMaestra:String(enlace.ID_MAESTRA)
@@ -3812,6 +4225,32 @@ function botComandoTelegramVercel(datos){
   }
 
   const idMaestra=String(enlace.ID_MAESTRA);
+
+  const maestraTelegram=obtenerRegistros('MAESTRAS').find(r=>
+    String(r.ID_MAESTRA||'')===idMaestra
+  );
+
+  if(!maestraTelegram){
+    return {
+      vinculado:false,
+      texto:'No se encontró la cuenta vinculada.'
+    };
+  }
+
+  try{
+    validarAccesoPorSuscripcion(maestraTelegram);
+  }catch(error){
+    const mensaje=String(
+      error&&error.message?error.message:error
+    ).replace(/^SUSCRIPCION_REQUERIDA:/,'');
+
+    return {
+      vinculado:true,
+      suscripcionVencida:true,
+      texto:mensaje
+    };
+  }
+
   let texto='';
 
   if(comando==='inicio'||comando==='start'||comando==='estado'){
@@ -5316,6 +5755,8 @@ function botConfirmarAlumnoTelegram(datos){
   if(!d.nombre||!d.apellido){
     throw new Error('Faltan el nombre o el apellido.');
   }
+
+  validarLimiteAlumnosPlan(enlace.idMaestra);
 
   const idAlumno=generarId('ALU');
   const hoja=obtenerHoja('ALUMNOS');

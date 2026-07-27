@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AppLogo from "@/components/AppLogo";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -144,6 +145,9 @@ export default function LoginPage() {
                   ? "Crear mi espacio"
                   : "Entrar a Aula Mágica"}
             </button>
+            <Link className="login-activation-link" href="/activar">
+              🔑 Tengo un código de activación
+            </Link>
           </form>
 
           {mensaje && <p className="notice">{mensaje}</p>}

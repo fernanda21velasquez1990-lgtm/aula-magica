@@ -869,3 +869,16 @@ img{max-width:100%}
 [data-theme="dark"] .plan-limits-grid input{background:#1d1723!important;color:#f5eef7!important;border-color:#51405a!important}
 @media(max-width:1050px){.plan-limits-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:650px){.plan-limits-grid{grid-template-columns:1fr}}
+
+
+/* Aula Mágica v10.2 - activación y renovación */
+.activation-result{margin:13px 0;padding:15px;border-radius:15px;background:#e9faef;border:1px solid #bde9ce;text-align:center}
+.activation-result h3{margin:0 0 7px}.activation-result strong{display:block;font-size:34px;letter-spacing:.18em;color:#356b49}.activation-result p{margin:5px 0}.activation-result small{display:block;margin-top:8px;color:#5f7165}
+.payment-renew-check{display:flex!important;grid-column:1/-1;grid-template-columns:auto 1fr!important;align-items:center;gap:9px;padding:10px;border-radius:11px;background:#f4f0ff}.payment-renew-check input{width:18px!important;height:18px}
+.login-activation-link{display:block;margin-top:13px;text-align:center;color:#704c99;font-size:12px;font-weight:900;text-decoration:none}
+.activation-page{min-height:100vh;display:grid;place-items:center;padding:24px;background:linear-gradient(145deg,#fff1f8,#edf9ff 55%,#f1ecff)}
+.activation-card{width:min(560px,100%);padding:30px;border-radius:28px;background:#fff;box-shadow:0 22px 60px rgba(62,42,74,.17)}
+.activation-brand{text-align:center}.activation-brand img{width:150px;height:105px;object-fit:contain}.activation-brand>span{display:block;width:max-content;margin:0 auto;padding:6px 10px;border-radius:999px;background:#f0e9ff;color:#684a95;font-size:10px;font-weight:900}.activation-brand h1{margin:12px 0 7px;font-size:34px}.activation-brand p{margin:0 0 19px;color:#776c7c;line-height:1.55}
+.activation-card form{display:grid;gap:12px}.activation-card label{display:grid;gap:6px;color:#655a6b;font-size:12px;font-weight:850}.activation-card input{width:100%;padding:12px;border:1px solid #e3d8e1;border-radius:12px;background:#fff;color:#352f44;font:inherit}.activation-card form>button,.activation-success a{display:block;border:0;border-radius:12px;padding:12px;background:linear-gradient(135deg,#ff78b6,#8870ec);color:#fff;font-weight:900;text-align:center;text-decoration:none;cursor:pointer}.activation-message{padding:11px;border-radius:11px;background:#fff1c9;color:#705707;font-weight:750}.activation-success{text-align:center}.activation-success>span{font-size:60px}.activation-success h2{margin:7px 0}.activation-success p{color:#6f6374}.activation-back{display:block;margin-top:15px;text-align:center;color:#77677f;font-size:12px;font-weight:850;text-decoration:none}
+[data-theme="dark"] .activation-card{background:#261f2e;color:#f5eef7}.activation-card input{background:#fff}
+@media(max-width:560px){.activation-page{padding:12px}.activation-card{padding:21px}.activation-brand h1{font-size:29px}}

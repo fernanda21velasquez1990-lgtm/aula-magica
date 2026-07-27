@@ -3,8 +3,8 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   adminActivarSuscripcion, adminCambiarEstadoSuscripcion,
-  adminGuardarLimitesPlan, adminObtenerSuscripciones,
-  adminRegistrarPagoSuscripcion,
+  adminGenerarActivacionCuenta, adminGuardarLimitesPlan,
+  adminObtenerSuscripciones, adminRegistrarPagoSuscripcion,
   type LicenciaAdministrador, type PanelSuscripciones
 } from "@/lib/apps-script-api";
 import { obtenerMaestra, obtenerToken } from "@/lib/session";
@@ -19,7 +19,8 @@ export default function SuscripcionesPage(){
   const [panel,setPanel]=useState(VACIO),[seleccionada,setSeleccionada]=useState<LicenciaAdministrador|null>(null);
   const [buscar,setBuscar]=useState(""),[filtro,setFiltro]=useState("TODAS"),[plan,setPlan]=useState("");
   const [mensaje,setMensaje]=useState(""),[cargando,setCargando]=useState(false);
-  const [pago,setPago]=useState({monto:0,moneda:"USD",metodo:"TRANSFERENCIA",referencia:"",fechaPago:hoy(),notas:""});
+  const [pago,setPago]=useState({monto:0,moneda:"USD",metodo:"TRANSFERENCIA",referencia:"",fechaPago:hoy(),notas:"",renovarLicencia:true});
+  const [activacion,setActivacion]=useState<{codigo:string;correo:string;plan:string;venceEnHoras:number}|null>(null);
   const [limites,setLimites]=useState<Record<string,number>>({});
   const admin=Boolean(usuario?.esAdmin)||String(usuario?.correo||"").toLowerCase()==="wilmarvelasquez1783@gmail.com";
 
@@ -66,9 +67,30 @@ export default function SuscripcionesPage(){
     }
   }
 
+  async function generarActivacion(){
+    if(!seleccionada||!plan)return;
+    const token=obtenerToken();
+    if(!token)return;
+
+    try{
+      const resultado=await adminGenerarActivacionCuenta(token,{
+        idMaestra:seleccionada.idMaestra,
+        idPlan:plan
+      });
+      setActivacion(resultado);
+      setMensaje("✅ Código de activación generado.");
+    }catch(e){
+      setMensaje(
+        e instanceof Error?e.message:"No se pudo generar la activación."
+      );
+    }
+  }
+
   async function registrar(event:FormEvent){event.preventDefault();if(!seleccionada)return;const token=obtenerToken();if(!token)return;
-    await adminRegistrarPagoSuscripcion(token,{...pago,idMaestra:seleccionada.idMaestra,idLicencia:seleccionada.idLicencia,idPlan:plan||seleccionada.idPlan});
-    setMensaje("✅ Pago registrado.");setPago({monto:0,moneda:"USD",metodo:"TRANSFERENCIA",referencia:"",fechaPago:hoy(),notas:""});await cargar();
+    const resultado=await adminRegistrarPagoSuscripcion(token,{...pago,idMaestra:seleccionada.idMaestra,idLicencia:seleccionada.idLicencia,idPlan:plan||seleccionada.idPlan});
+    setMensaje(resultado.renovada?"✅ Pago registrado y licencia renovada.":"✅ Pago registrado.");
+    setPago({monto:0,moneda:"USD",metodo:"TRANSFERENCIA",referencia:"",fechaPago:hoy(),notas:"",renovarLicencia:true});
+    await cargar();
   }
 
   if(!admin)return <div className="state-card">🔐 Verificando acceso...</div>;
@@ -121,18 +143,26 @@ export default function SuscripcionesPage(){
         <span><b>{x.nombreMaestra}</b><small>{x.correo}</small></span><span>{x.plan}</span>
         <span><b>{x.fechaVencimiento}</b><small>{x.diasRestantes} días</small></span>
         <span><i className={`license-status ${x.estado.toLowerCase()}`}>{x.estado}</i></span>
-        <span><button onClick={()=>{setSeleccionada(x);setPlan(x.idPlan)}}>Administrar</button></span>
+        <span><button onClick={()=>{setSeleccionada(x);setPlan(x.idPlan);setActivacion(null)}}>Administrar</button></span>
       </div>)}
     </div></section>
     {seleccionada&&<div className="subscription-modal-backdrop"><section className="subscription-modal">
-      <header><div><h2>{seleccionada.nombreMaestra}</h2><p>{seleccionada.correo}</p></div><button onClick={()=>setSeleccionada(null)}>×</button></header>
+      <header><div><h2>{seleccionada.nombreMaestra}</h2><p>{seleccionada.correo}</p></div><button onClick={()=>{setSeleccionada(null);setActivacion(null)}}>×</button></header>
       <label>Plan<select value={plan} onChange={e=>setPlan(e.target.value)}>{panel.planes.map(p=><option key={p.idPlan} value={p.idPlan}>{p.nombre} · {p.duracionDias} días · {p.limiteAlumnos < 0 ? "Ilimitados" : `${p.limiteAlumnos} alumnos`} · {dineroUsd(p.precioUsd)} / {dineroVes(p.precioVes)}</option>)}</select></label>
       <div className="dual-price-note">
         <b>Precios configurados</b>
         <span>USD: {dineroUsd(panel.planes.find(p=>p.idPlan===plan)?.precioUsd||0)}</span>
         <span>VES: {dineroVes(panel.planes.find(p=>p.idPlan===plan)?.precioVes||0)}</span>
       </div>
-      <div className="subscription-actions"><button className="primary" onClick={()=>void activar()}>✅ Activar o renovar</button><button onClick={()=>void estado("SUSPENDIDA")}>⏸️ Suspender</button><button onClick={()=>void estado("BLOQUEADA")}>🔒 Bloquear</button><button onClick={()=>void estado("ACTIVA")}>🔓 Reactivar</button></div>
+      <div className="subscription-actions"><button className="primary" onClick={()=>void activar()}>✅ Activar o renovar</button><button onClick={()=>void generarActivacion()}>🔑 Generar código de activación</button><button onClick={()=>void estado("SUSPENDIDA")}>⏸️ Suspender</button><button onClick={()=>void estado("BLOQUEADA")}>🔒 Bloquear</button><button onClick={()=>void estado("ACTIVA")}>🔓 Reactivar</button></div>
+      {activacion&&<div className="activation-result">
+        <h3>🔑 Código de activación</h3>
+        <strong>{activacion.codigo}</strong>
+        <p>Cuenta: {activacion.correo}</p>
+        <p>Plan: {activacion.plan}</p>
+        <p>Vence en {activacion.venceEnHoras} horas.</p>
+        <small>La maestra debe entrar en /activar y crear su contraseña.</small>
+      </div>}
       <form className="payment-form" onSubmit={registrar}><h3>Registrar pago</h3><div>
         <label>Moneda<select value={pago.moneda} onChange={e=>setPago({...pago,moneda:e.target.value})}><option value="USD">Dólares (USD)</option><option value="VES">Bolívares (VES)</option></select></label>
         <label>Monto<input type="number" min="0" step="0.01" required value={pago.monto} onChange={e=>setPago({...pago,monto:Number(e.target.value)})}/></label>
@@ -140,6 +170,7 @@ export default function SuscripcionesPage(){
         <label>Referencia<input value={pago.referencia} onChange={e=>setPago({...pago,referencia:e.target.value})}/></label>
         <label>Fecha<input type="date" value={pago.fechaPago} onChange={e=>setPago({...pago,fechaPago:e.target.value})}/></label>
         <label className="wide">Notas<textarea value={pago.notas} onChange={e=>setPago({...pago,notas:e.target.value})}/></label>
+        <label className="wide payment-renew-check"><input type="checkbox" checked={pago.renovarLicencia} onChange={e=>setPago({...pago,renovarLicencia:e.target.checked})}/><span>Renovar automáticamente la licencia al registrar este pago</span></label>
       </div><button>💾 Registrar pago</button></form>
     </section></div>}
     {cargando&&<div className="records-loading">Cargando...</div>}
