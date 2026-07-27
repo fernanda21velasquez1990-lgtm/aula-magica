@@ -914,7 +914,14 @@ function plansManageListKeyboard(
 }
 
 function planItemKeyboard(planId: string, state: string) {
-  const rows: Array<Array<{ text: string; callback_data: string }>> = [];
+  const rows: Array<Array<{ text: string; callback_data: string }>> = [
+    [
+      {
+        text: "✏️ Editar planificación",
+        callback_data: `plan_edit:${planId}`,
+      },
+    ],
+  ];
 
   if (state !== "COMPLETADA") {
     rows.push([
@@ -1277,6 +1284,32 @@ function meetingEditKeyboard(step?: string) {
   return {
     inline_keyboard: [
       [{ text: "❌ Cancelar", callback_data: "meeting_edit_cancel" }],
+    ],
+  };
+}
+
+
+function planEditKeyboard(step?: string) {
+  if (step === "CONFIRMAR") {
+    return {
+      inline_keyboard: [
+        [
+          {
+            text: "✅ Guardar cambios",
+            callback_data: "plan_edit_confirm",
+          },
+          {
+            text: "❌ Cancelar",
+            callback_data: "plan_edit_cancel",
+          },
+        ],
+      ],
+    };
+  }
+
+  return {
+    inline_keyboard: [
+      [{ text: "❌ Cancelar", callback_data: "plan_edit_cancel" }],
     ],
   };
 }
@@ -2152,6 +2185,73 @@ async function handleUpdate(update: TelegramUpdate) {
       )
     );
     return;
+  }
+
+  if (command.startsWith("plan_edit:")) {
+    const planId = rawText.split(":")[1] || "";
+
+    const result = await callAppsScript<BotResult>(
+      "botIniciarEdicionPlanTelegram",
+      { chatId, idPlanificacion: planId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Escribe el nuevo título."),
+      true,
+      planEditKeyboard(result.paso)
+    );
+    return;
+  }
+
+  if (command === "plan_edit_confirm") {
+    const result = await callAppsScript<BotResult>(
+      "botConfirmarEdicionPlanTelegram",
+      { chatId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Planificación actualizada."),
+      true,
+      plansMenuKeyboard()
+    );
+    return;
+  }
+
+  if (command === "plan_edit_cancel") {
+    const result = await callAppsScript<BotResult>(
+      "botCancelarEdicionPlanTelegram",
+      { chatId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Operación cancelada."),
+      true
+    );
+    return;
+  }
+
+  if (!callback && !rawText.startsWith("/")) {
+    const planEditFlow = await callAppsScript<BotResult>(
+      "botProcesarEdicionPlanTelegram",
+      { chatId, texto: rawText }
+    );
+
+    if (planEditFlow.activo || planEditFlow.cancelado) {
+      await sendMessage(
+        chatId,
+        escapeHtml(
+          planEditFlow.texto || "Continúa con el siguiente paso."
+        ),
+        true,
+        planEditFlow.activo
+          ? planEditKeyboard(planEditFlow.paso)
+          : mainMenuKeyboard(true)
+      );
+      return;
+    }
   }
 
   if (command.startsWith("plan_state:")) {
