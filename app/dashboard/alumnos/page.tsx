@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   crearAlumno,
@@ -39,13 +39,30 @@ export default function AlumnosPage() {
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState("");
+  const [ultimaActualizacion, setUltimaActualizacion] = useState<Date | null>(null);
+  const [mostrarSincronizacion, setMostrarSincronizacion] = useState(false);
+  const temporizadorRef = useRef<number | null>(null);
+  const formularioRef = useRef(false);
+  const guardandoRef = useRef(false);
   const maestra = obtenerMaestra();
 
   useEffect(() => {
-    void cargarAlumnos();
+    formularioRef.current = mostrarFormulario;
+  }, [mostrarFormulario]);
+
+  useEffect(() => {
+    guardandoRef.current = guardando;
+  }, [guardando]);
+
+  useEffect(() => {
+    return () => {
+      if (temporizadorRef.current !== null) {
+        window.clearTimeout(temporizadorRef.current);
+      }
+    };
   }, []);
 
-  async function cargarAlumnos() {
+  const cargarAlumnos = useCallback(async (silencioso = false) => {
     const token = obtenerToken();
     if (!token) {
       eliminarSesion();
@@ -53,16 +70,65 @@ export default function AlumnosPage() {
       return;
     }
 
-    setCargando(true);
-    setMensaje("");
+    if (!silencioso) {
+      setCargando(true);
+      setMensaje("");
+    }
+
     try {
       setAlumnos(await listarAlumnos(token));
+      setUltimaActualizacion(new Date());
+
+      if (!silencioso) {
+        setMostrarSincronizacion(true);
+
+        if (temporizadorRef.current !== null) {
+          window.clearTimeout(temporizadorRef.current);
+        }
+
+        temporizadorRef.current = window.setTimeout(() => {
+          setMostrarSincronizacion(false);
+          temporizadorRef.current = null;
+        }, 3000);
+      }
     } catch (error) {
-      setMensaje(error instanceof Error ? error.message : "No se pudieron cargar los alumnos.");
+      if (!silencioso) {
+        setMensaje(
+          error instanceof Error
+            ? error.message
+            : "No se pudieron cargar los alumnos."
+        );
+      }
     } finally {
-      setCargando(false);
+      if (!silencioso) setCargando(false);
     }
-  }
+  }, [router]);
+
+  useEffect(() => {
+    void cargarAlumnos();
+  }, [cargarAlumnos]);
+
+  useEffect(() => {
+    const actualizar = () => {
+      if (
+        document.visibilityState === "visible" &&
+        !formularioRef.current &&
+        !guardandoRef.current
+      ) {
+        void cargarAlumnos(true);
+      }
+    };
+
+    const intervalo = window.setInterval(actualizar, 10_000);
+    window.addEventListener("focus", actualizar);
+    document.addEventListener("visibilitychange", actualizar);
+
+    return () => {
+      window.clearInterval(intervalo);
+      window.removeEventListener("focus", actualizar);
+      document.removeEventListener("visibilitychange", actualizar);
+    };
+  }, [cargarAlumnos]);
 
   function actualizarCampo(campo: keyof typeof formulario, valor: string) {
     setFormulario((previo) => ({ ...previo, [campo]: valor }));
@@ -169,9 +235,23 @@ export default function AlumnosPage() {
           <h1>Mis alumnos 👩‍🎓</h1>
           <p>Registra y administra únicamente los estudiantes de tu curso.</p>
         </div>
-        <button type="button" className="students-primary-button" onClick={abrirNuevoAlumno}>
-          + Agregar alumno
-        </button>
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            className="students-primary-button"
+            onClick={() => void cargarAlumnos()}
+            disabled={cargando || guardando}
+          >
+            🔄 Actualizar
+          </button>
+          <button
+            type="button"
+            className="students-primary-button"
+            onClick={abrirNuevoAlumno}
+          >
+            + Agregar alumno
+          </button>
+        </div>
       </section>
 
       <section className="students-toolbar">
@@ -186,6 +266,17 @@ export default function AlumnosPage() {
           <span>{alumnosFiltrados.length === 1 ? " alumno" : " alumnos"}</span>
         </div>
       </section>
+
+      {mostrarSincronizacion && ultimaActualizacion && !mensaje && (
+        <div className="students-message" role="status" aria-live="polite">
+          ✅ Datos actualizados correctamente a las{" "}
+          {ultimaActualizacion.toLocaleTimeString("es-ES", {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          })}
+        </div>
+      )}
 
       {mensaje && <div className="students-message">{mensaje}</div>}
 

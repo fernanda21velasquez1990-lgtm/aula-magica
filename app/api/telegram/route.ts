@@ -406,12 +406,66 @@ function keyboardForGradeStep(step?: string) {
   return gradeCancelKeyboard();
 }
 
+
+function studentsMenuKeyboard() {
+  return {
+    inline_keyboard: [
+      [
+        { text: "📋 Ver resumen", callback_data: "alumnos" },
+        { text: "➕ Registrar alumno", callback_data: "student_create" },
+      ],
+      [{ text: "⬅️ Volver al menú", callback_data: "inicio" }],
+    ],
+  };
+}
+
+function studentSexKeyboard() {
+  return {
+    inline_keyboard: [
+      [
+        { text: "👧 Femenino", callback_data: "student_sex:FEMENINO" },
+        { text: "👦 Masculino", callback_data: "student_sex:MASCULINO" },
+      ],
+      [
+        { text: "🧒 Otro", callback_data: "student_sex:OTRO" },
+        { text: "➖ Omitir", callback_data: "student_sex:OMITIR" },
+      ],
+      [{ text: "❌ Cancelar", callback_data: "student_cancel" }],
+    ],
+  };
+}
+
+function studentCancelKeyboard() {
+  return {
+    inline_keyboard: [
+      [{ text: "❌ Cancelar", callback_data: "student_cancel" }],
+    ],
+  };
+}
+
+function studentConfirmKeyboard() {
+  return {
+    inline_keyboard: [
+      [
+        { text: "✅ Guardar alumno", callback_data: "student_confirm" },
+        { text: "❌ Cancelar", callback_data: "student_cancel" },
+      ],
+    ],
+  };
+}
+
+function keyboardForStudentStep(step?: string) {
+  if (step === "SEXO") return studentSexKeyboard();
+  if (step === "CONFIRMAR") return studentConfirmKeyboard();
+  return studentCancelKeyboard();
+}
+
 function mainMenuKeyboard(linked = true) {
   const rows: InlineButton[][] = linked
     ? [
         [
           { text: "🏠 Inicio", callback_data: "inicio" },
-          { text: "👩‍🎓 Alumnos", callback_data: "alumnos" },
+          { text: "👩‍🎓 Alumnos", callback_data: "students_menu" },
         ],
         [
           { text: "✅ Asistencia", callback_data: "att_manage" },
@@ -483,6 +537,95 @@ async function handleUpdate(update: TelegramUpdate) {
   await answerCallback(callback?.id);
 
   const { command, argument } = commandFromText(rawText);
+
+  if (command === "students_menu") {
+    await sendMessage(
+      chatId,
+      "👩‍🎓 <b>Alumnos</b>\n\nConsulta el resumen o registra un alumno nuevo.",
+      true,
+      studentsMenuKeyboard()
+    );
+    return;
+  }
+
+  if (command === "student_create") {
+    const result = await callAppsScript<BotResult>(
+      "botIniciarAlumnoTelegram",
+      { chatId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Escribe el nombre."),
+      true,
+      keyboardForStudentStep(result.paso)
+    );
+    return;
+  }
+
+  if (command.startsWith("student_sex:")) {
+    const sexo = rawText.split(":")[1] || "";
+
+    const result = await callAppsScript<BotResult>(
+      "botSeleccionarSexoAlumnoTelegram",
+      { chatId, sexo }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Escribe el grado."),
+      true,
+      keyboardForStudentStep(result.paso)
+    );
+    return;
+  }
+
+  if (command === "student_confirm") {
+    const result = await callAppsScript<BotResult>(
+      "botConfirmarAlumnoTelegram",
+      { chatId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Alumno guardado."),
+      true
+    );
+    return;
+  }
+
+  if (command === "student_cancel") {
+    const result = await callAppsScript<BotResult>(
+      "botCancelarFlujoAlumnoTelegram",
+      { chatId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Operación cancelada."),
+      true
+    );
+    return;
+  }
+
+  if (!callback && !rawText.startsWith("/")) {
+    const studentFlow = await callAppsScript<BotResult>(
+      "botProcesarFlujoAlumnoTelegram",
+      { chatId, texto: rawText }
+    );
+
+    if (studentFlow.activo || studentFlow.cancelado) {
+      await sendMessage(
+        chatId,
+        escapeHtml(studentFlow.texto || "Continúa con el siguiente paso."),
+        true,
+        studentFlow.activo
+          ? keyboardForStudentStep(studentFlow.paso)
+          : mainMenuKeyboard(true)
+      );
+      return;
+    }
+  }
 
   if (command === "grades_menu") {
     await sendMessage(
