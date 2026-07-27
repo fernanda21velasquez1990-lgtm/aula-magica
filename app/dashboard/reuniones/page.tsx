@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   eliminarReunion,
@@ -193,9 +193,19 @@ export default function ReunionesPage() {
           <h1>Reuniones 🤝</h1>
           <p>Registra encuentros, participantes, temas tratados y acuerdos.</p>
         </div>
-        <button type="button" className="meetings-primary-button" onClick={abrirNueva}>
-          + Nueva reunión
-        </button>
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            className="meetings-primary-button"
+            onClick={() => void cargarReuniones()}
+            disabled={cargando || guardando}
+          >
+            🔄 Actualizar
+          </button>
+          <button type="button" className="meetings-primary-button" onClick={abrirNueva}>
+            + Nueva reunión
+          </button>
+        </div>
       </section>
 
       <section className="meetings-summary">
@@ -217,6 +227,18 @@ export default function ReunionesPage() {
           {ESTADOS.map((opcion) => <option key={opcion} value={opcion}>{opcion}</option>)}
         </select>
       </section>
+
+      {ultimaActualizacion && !mensaje && (
+        <div className="meetings-message">
+          🔄 Sincronizado con Google Sheets a las{" "}
+          {ultimaActualizacion.toLocaleTimeString("es-ES", {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          })}
+          {" · Actualización automática activa."}
+        </div>
+      )}
 
       {mensaje && <div className="meetings-message">{mensaje}</div>}
 
