@@ -94,6 +94,15 @@ export default function LoginPage() {
               : "Ingresa para continuar con tu jornada docente."}
           </p>
 
+          <Link className="public-guide-button" href="/guia">
+            <span>📘</span>
+            <div>
+              <strong>Conoce cómo funciona Aula Mágica</strong>
+              <small>Guía completa para celular, computadora y Telegram</small>
+            </div>
+            <b>Ver guía →</b>
+          </Link>
+
           <form onSubmit={submit}>
             {register && (
               <>
