@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import AppBoot from "@/components/AppBoot";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -17,21 +16,6 @@ export const metadata: Metadata = {
     "calificaciones",
     "planificación",
   ],
-  openGraph: {
-    title: "Aula Mágica",
-    description:
-      "Organiza alumnos, asistencia, notas, planificación y materiales en un solo espacio mágico.",
-    type: "website",
-    locale: "es_ES",
-    images: [
-      {
-        url: "/brand/aula-magica-social.jpg",
-        width: 1200,
-        height: 630,
-        alt: "Logo de Aula Mágica",
-      },
-    ],
-  },
 };
 
 export const viewport: Viewport = {
@@ -71,10 +55,7 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      <body>
-        <AppBoot />
-        {children}
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

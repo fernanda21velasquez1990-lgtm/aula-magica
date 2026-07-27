@@ -253,18 +253,18 @@ function obtenerConfiguracionValor(clave,valorPorDefecto){
 
 function verificarAdministrador(token){
   const maestra=verificarSesion(token);
-  const correoAdmin=obtenerConfiguracionValor('ADMIN_CORREO','');
+  const correoPropietario='wilmarvelasquez1783@gmail.com';
+  const correoConfigurado=obtenerConfiguracionValor(
+    'ADMIN_CORREO',
+    correoPropietario
+  );
 
-  if(!correoAdmin){
-    throw new Error(
-      'Configura ADMIN_CORREO en la hoja CONFIGURACION.'
-    );
-  }
+  const correoActual=normalizarCorreo(maestra.correo);
+  const permitido=
+    correoActual===normalizarCorreo(correoPropietario)||
+    correoActual===normalizarCorreo(correoConfigurado);
 
-  if(
-    normalizarCorreo(maestra.correo)!==
-    normalizarCorreo(correoAdmin)
-  ){
+  if(!permitido){
     throw new Error('No tienes permiso para acceder al Panel Administrador.');
   }
 
@@ -593,7 +593,13 @@ function verificarSesion(token){
   return maestraPublica(m);
 }
 function maestraPublica(m){
-  const correoAdmin=obtenerConfiguracionValor('ADMIN_CORREO','');
+  const correoPropietario='wilmarvelasquez1783@gmail.com';
+  const correoAdmin=obtenerConfiguracionValor(
+    'ADMIN_CORREO',
+    correoPropietario
+  );
+  const correoMaestra=normalizarCorreo(m.CORREO);
+
   return {
     idMaestra:String(m.ID_MAESTRA),
     nombre:String(m.NOMBRE),
@@ -603,8 +609,8 @@ function maestraPublica(m){
     grado:String(m.GRADO||''),
     seccion:String(m.SECCION||''),
     esAdmin:Boolean(
-      correoAdmin&&
-      normalizarCorreo(m.CORREO)===normalizarCorreo(correoAdmin)
+      correoMaestra===normalizarCorreo(correoPropietario)||
+      correoMaestra===normalizarCorreo(correoAdmin)
     )
   };
 }

@@ -1,17 +1,8 @@
-import AppLogo from "@/components/AppLogo";
-
 export default function Loading() {
   return (
-    <main className="route-loading">
-      <section>
-        <AppLogo href="" priority />
-        <div className="magic-loader" aria-hidden="true">
-          <span />
-          <span />
-          <span />
-        </div>
-        <p>Cargando...</p>
-      </section>
+    <main className="simple-loading" role="status" aria-live="polite">
+      <div className="simple-loading-spinner" aria-hidden="true" />
+      <strong>Cargando Aula Mágica...</strong>
     </main>
   );
 }
