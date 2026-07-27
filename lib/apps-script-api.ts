@@ -724,3 +724,116 @@ export async function adminActualizarCompra(
     data: { idCompra, estado, referencia },
   });
 }
+
+
+export type TipoCalendarioEscolar =
+  | "CLASE"
+  | "EVALUACION"
+  | "REUNION"
+  | "FERIADO"
+  | "EVENTO"
+  | "ENTREGA";
+
+export type CalendarioEscolar = {
+  idCalendario: string;
+  titulo: string;
+  tipo: TipoCalendarioEscolar;
+  fechaInicio: string;
+  fechaFin: string;
+  hora: string;
+  lugar: string;
+  descripcion: string;
+  recordatorio: string;
+  estado: string;
+};
+
+export type DatosCalendarioEscolar =
+  Omit<CalendarioEscolar, "idCalendario"> & {
+    idCalendario?: string;
+  };
+
+export async function listarCalendarioEscolar(token: string) {
+  return llamarAppsScript<CalendarioEscolar[]>({
+    action: "listarCalendarioEscolar",
+    token,
+  });
+}
+
+export async function guardarCalendarioEscolar(
+  token: string,
+  datos: DatosCalendarioEscolar
+) {
+  return llamarAppsScript<CalendarioEscolar>({
+    action: "guardarCalendarioEscolar",
+    token,
+    data: datos,
+  });
+}
+
+export async function eliminarCalendarioEscolar(
+  token: string,
+  idCalendario: string
+) {
+  return llamarAppsScript<{ eliminado: boolean; idCalendario: string }>({
+    action: "eliminarCalendarioEscolar",
+    token,
+    data: { idCalendario },
+  });
+}
+
+export type DiaHorario =
+  | "LUNES"
+  | "MARTES"
+  | "MIERCOLES"
+  | "JUEVES"
+  | "VIERNES"
+  | "SABADO"
+  | "DOMINGO";
+
+export type HorarioSemanal = {
+  idHorario: string;
+  dia: DiaHorario;
+  horaInicio: string;
+  horaFin: string;
+  asignatura: string;
+  grado: string;
+  seccion: string;
+  aula: string;
+  color: string;
+  notas: string;
+  estado: string;
+};
+
+export type DatosHorarioSemanal =
+  Omit<HorarioSemanal, "idHorario"> & {
+    idHorario?: string;
+  };
+
+export async function listarHorarioSemanal(token: string) {
+  return llamarAppsScript<HorarioSemanal[]>({
+    action: "listarHorarioSemanal",
+    token,
+  });
+}
+
+export async function guardarHorarioSemanal(
+  token: string,
+  datos: DatosHorarioSemanal
+) {
+  return llamarAppsScript<HorarioSemanal>({
+    action: "guardarHorarioSemanal",
+    token,
+    data: datos,
+  });
+}
+
+export async function eliminarHorarioSemanal(
+  token: string,
+  idHorario: string
+) {
+  return llamarAppsScript<{ eliminado: boolean; idHorario: string }>({
+    action: "eliminarHorarioSemanal",
+    token,
+    data: { idHorario },
+  });
+}

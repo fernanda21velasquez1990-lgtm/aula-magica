@@ -4,6 +4,8 @@ import {
   Cake,
   CalendarClock,
   CalendarDays,
+  CalendarRange,
+  Clock3,
   ClipboardCheck,
   FileBarChart,
   GraduationCap,
@@ -30,6 +32,8 @@ const items = [
   ["/dashboard/cumpleanos", "Cumpleaños", Cake],
   ["/dashboard/reuniones", "Reuniones", Handshake],
   ["/dashboard/agenda", "Agenda", CalendarClock],
+  ["/dashboard/calendario-escolar", "Calendario escolar", CalendarRange],
+  ["/dashboard/horario", "Horario semanal", Clock3],
   ["/dashboard/baul", "Mi Baúl", PackageOpen],
   ["/dashboard/telegram", "Telegram", Send],
   ["/dashboard/reportes", "Reportes", FileBarChart],
@@ -94,7 +98,7 @@ export default function Sidebar() {
 
       <div className="sidebar-footer">
         <ThemeToggle />
-        <small>Versión profesional 8.0</small>
+        <small>Versión profesional 9.0</small>
       </div>
     </aside>
   );

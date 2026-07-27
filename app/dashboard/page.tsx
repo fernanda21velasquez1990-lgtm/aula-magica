@@ -12,6 +12,8 @@ const opciones = [
   ["Cumpleaños","Consultar próximos cumpleaños.","🎂","/dashboard/cumpleanos"],
   ["Reuniones","Guardar reuniones y acuerdos.","🤝","/dashboard/reuniones"],
   ["Agenda","Organizar eventos y recordatorios.","📅","/dashboard/agenda"],
+  ["Calendario escolar","Evaluaciones, feriados y actividades.","🏫","/dashboard/calendario-escolar"],
+  ["Horario semanal","Organizar clases por día y hora.","🗓️","/dashboard/horario"],
   ["Telegram","Conectar el bot y consultar información.","✈️","/dashboard/telegram"],
   ["Reportes","Consultar resúmenes, imprimir y exportar datos.","📊","/dashboard/reportes"],
 ] as const;
