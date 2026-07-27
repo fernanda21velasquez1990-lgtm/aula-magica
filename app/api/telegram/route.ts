@@ -31,6 +31,12 @@ type BotResult = {
   vinculado?: boolean;
   texto?: string;
   nombre?: string;
+  alumnos?: Array<{
+    idAlumno: string;
+    nombre: string;
+    grado?: string;
+    seccion?: string;
+  }>;
 };
 
 const BOT_API = "https://api.telegram.org";
@@ -130,6 +136,49 @@ type InlineButton = {
   url?: string;
 };
 
+
+function attendanceMenuKeyboard() {
+  return {
+    inline_keyboard: [
+      [{ text: "✅ Todos presentes", callback_data: "att_all_present" }],
+      [{ text: "👩‍🎓 Marcar alumno", callback_data: "att_students" }],
+      [{ text: "⬅️ Volver al menú", callback_data: "inicio" }],
+    ],
+  };
+}
+
+function studentListKeyboard(
+  students: Array<{ idAlumno: string; nombre: string }>
+) {
+  const rows = students.slice(0, 20).map((student) => [
+    {
+      text: `👩‍🎓 ${student.nombre}`,
+      callback_data: `att_student:${student.idAlumno}`,
+    },
+  ]);
+  rows.push([{ text: "⬅️ Volver", callback_data: "att_manage" }]);
+  return { inline_keyboard: rows };
+}
+
+function attendanceStateKeyboard(studentId: string) {
+  return {
+    inline_keyboard: [
+      [
+        { text: "✅ Presente", callback_data: `att_set:${studentId}:PRESENTE` },
+        { text: "❌ Ausente", callback_data: `att_set:${studentId}:AUSENTE` },
+      ],
+      [
+        { text: "⏰ Tarde", callback_data: `att_set:${studentId}:TARDE` },
+        {
+          text: "📄 Justificado",
+          callback_data: `att_set:${studentId}:JUSTIFICADO`,
+        },
+      ],
+      [{ text: "⬅️ Elegir otro alumno", callback_data: "att_students" }],
+    ],
+  };
+}
+
 function mainMenuKeyboard(linked = true) {
   const rows: InlineButton[][] = linked
     ? [
@@ -138,7 +187,7 @@ function mainMenuKeyboard(linked = true) {
           { text: "👩‍🎓 Alumnos", callback_data: "alumnos" },
         ],
         [
-          { text: "✅ Asistencia", callback_data: "asistencia" },
+          { text: "✅ Asistencia", callback_data: "att_manage" },
           { text: "📝 Notas", callback_data: "notas" },
         ],
         [
@@ -164,14 +213,15 @@ function mainMenuKeyboard(linked = true) {
 async function sendMessage(
   chatId: string,
   text: string,
-  linked = true
+  linked = true,
+  replyMarkup?: Record<string, unknown>
 ) {
   return telegramRequest("sendMessage", {
     chat_id: chatId,
     text,
     parse_mode: "HTML",
     disable_web_page_preview: true,
-    reply_markup: mainMenuKeyboard(linked),
+    reply_markup: replyMarkup || mainMenuKeyboard(linked),
   });
 }
 
@@ -206,6 +256,76 @@ async function handleUpdate(update: TelegramUpdate) {
   await answerCallback(callback?.id);
 
   const { command, argument } = commandFromText(rawText);
+
+  if (command === "att_manage") {
+    await sendMessage(
+      chatId,
+      "✅ <b>Tomar asistencia de hoy</b>\n\nSelecciona una opción:",
+      true,
+      attendanceMenuKeyboard()
+    );
+    return;
+  }
+
+  if (command === "att_all_present") {
+    const result = await callAppsScript<BotResult>(
+      "botGuardarAsistenciaRapida",
+      { chatId, modo: "TODOS_PRESENTES" }
+    );
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Asistencia guardada."),
+      true
+    );
+    return;
+  }
+
+  if (command === "att_students") {
+    const result = await callAppsScript<BotResult>(
+      "botListarAlumnosAsistencia",
+      { chatId }
+    );
+    const students = result.alumnos || [];
+    if (!students.length) {
+      await sendMessage(chatId, "No hay alumnos registrados.", true);
+      return;
+    }
+    await sendMessage(
+      chatId,
+      "👩‍🎓 <b>Selecciona un alumno</b>",
+      true,
+      studentListKeyboard(students)
+    );
+    return;
+  }
+
+  if (command.startsWith("att_student:")) {
+    const studentId = rawText.split(":")[1] || "";
+    if (!studentId) return;
+    await sendMessage(
+      chatId,
+      "Selecciona el estado de asistencia:",
+      true,
+      attendanceStateKeyboard(studentId)
+    );
+    return;
+  }
+
+  if (command.startsWith("att_set:")) {
+    const [, studentId = "", state = ""] = rawText.split(":");
+    if (!studentId || !state) return;
+    const result = await callAppsScript<BotResult>(
+      "botGuardarAsistenciaRapida",
+      { chatId, modo: "INDIVIDUAL", idAlumno: studentId, estado: state }
+    );
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Asistencia actualizada."),
+      true,
+      attendanceMenuKeyboard()
+    );
+    return;
+  }
 
   if (command === "start") {
     await sendMessage(
