@@ -911,7 +911,16 @@ export async function adminRegistrarPagoSuscripcion(token:string,datos:{
   idMaestra:string;idLicencia:string;idPlan:string;monto:number;moneda:string;metodo?:string;
   referencia?:string;fechaPago?:string;notas?:string;renovarLicencia?:boolean;
 }){
-  return llamarAppsScript<{guardado:boolean;idPago:string}>({action:"adminRegistrarPagoSuscripcion",token,data:datos});
+  return llamarAppsScript<{
+    guardado:boolean;
+    idPago:string;
+    renovada:boolean;
+    vencimiento:string;
+  }>({
+    action:"adminRegistrarPagoSuscripcion",
+    token,
+    data:datos
+  });
 }
 
 
