@@ -41,6 +41,8 @@ type BotResult = {
   paso?: string;
   guardado?: boolean;
   cancelado?: boolean;
+  tieneFecha?: boolean;
+  eliminado?: boolean;
 };
 
 const BOT_API = "https://api.telegram.org";
@@ -460,6 +462,74 @@ function keyboardForStudentStep(step?: string) {
   return studentCancelKeyboard();
 }
 
+
+function birthdaysMenuKeyboard() {
+  return {
+    inline_keyboard: [
+      [
+        { text: "📋 Ver próximos", callback_data: "cumpleanos" },
+        { text: "⚙️ Configurar", callback_data: "birthday_manage" },
+      ],
+      [{ text: "⬅️ Volver al menú", callback_data: "inicio" }],
+    ],
+  };
+}
+
+function birthdayStudentKeyboard(
+  students: Array<{ idAlumno: string; nombre: string }>
+) {
+  const rows = students.slice(0, 20).map((student) => [
+    {
+      text: `🎂 ${student.nombre}`,
+      callback_data: `birthday_student:${student.idAlumno}`,
+    },
+  ]);
+
+  rows.push([{ text: "❌ Cancelar", callback_data: "birthday_cancel" }]);
+  return { inline_keyboard: rows };
+}
+
+function birthdayDateKeyboard(hasDate = false) {
+  const rows: Array<Array<{ text: string; callback_data: string }>> = [];
+
+  if (hasDate) {
+    rows.push([
+      { text: "🗑️ Quitar fecha", callback_data: "birthday_remove" },
+    ]);
+  }
+
+  rows.push([
+    { text: "❌ Cancelar", callback_data: "birthday_cancel" },
+  ]);
+
+  return { inline_keyboard: rows };
+}
+
+function birthdayCancelKeyboard() {
+  return {
+    inline_keyboard: [
+      [{ text: "❌ Cancelar", callback_data: "birthday_cancel" }],
+    ],
+  };
+}
+
+function birthdayConfirmKeyboard() {
+  return {
+    inline_keyboard: [
+      [
+        { text: "✅ Guardar cumpleaños", callback_data: "birthday_confirm" },
+        { text: "❌ Cancelar", callback_data: "birthday_cancel" },
+      ],
+    ],
+  };
+}
+
+function keyboardForBirthdayStep(step?: string, hasDate = false) {
+  if (step === "FECHA_NACIMIENTO") return birthdayDateKeyboard(hasDate);
+  if (step === "CONFIRMAR") return birthdayConfirmKeyboard();
+  return birthdayCancelKeyboard();
+}
+
 function mainMenuKeyboard(linked = true) {
   const rows: InlineButton[][] = linked
     ? [
@@ -473,7 +543,7 @@ function mainMenuKeyboard(linked = true) {
         ],
         [
           { text: "📚 Planes", callback_data: "plans_menu" },
-          { text: "🎂 Cumpleaños", callback_data: "cumpleanos" },
+          { text: "🎂 Cumpleaños", callback_data: "birthdays_menu" },
         ],
         [
           { text: "🤝 Reuniones", callback_data: "meetings_menu" },
@@ -537,6 +607,116 @@ async function handleUpdate(update: TelegramUpdate) {
   await answerCallback(callback?.id);
 
   const { command, argument } = commandFromText(rawText);
+
+  if (command === "birthdays_menu") {
+    await sendMessage(
+      chatId,
+      "🎂 <b>Cumpleaños</b>\n\nConsulta los próximos o configura la fecha de un alumno.",
+      true,
+      birthdaysMenuKeyboard()
+    );
+    return;
+  }
+
+  if (command === "birthday_manage") {
+    const result = await callAppsScript<BotResult>(
+      "botIniciarCumpleanosTelegram",
+      { chatId }
+    );
+
+    const students = result.alumnos || [];
+
+    if (!students.length) {
+      await sendMessage(chatId, "No hay alumnos registrados.", true);
+      return;
+    }
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Selecciona un alumno."),
+      true,
+      birthdayStudentKeyboard(students)
+    );
+    return;
+  }
+
+  if (command.startsWith("birthday_student:")) {
+    const idAlumno = rawText.split(":")[1] || "";
+
+    const result = await callAppsScript<BotResult>(
+      "botSeleccionarAlumnoCumpleanosTelegram",
+      { chatId, idAlumno }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Escribe la fecha de nacimiento."),
+      true,
+      keyboardForBirthdayStep(result.paso, Boolean(result.tieneFecha))
+    );
+    return;
+  }
+
+  if (command === "birthday_remove") {
+    const result = await callAppsScript<BotResult>(
+      "botQuitarCumpleanosTelegram",
+      { chatId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Fecha eliminada."),
+      true
+    );
+    return;
+  }
+
+  if (command === "birthday_confirm") {
+    const result = await callAppsScript<BotResult>(
+      "botConfirmarCumpleanosTelegram",
+      { chatId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Cumpleaños actualizado."),
+      true
+    );
+    return;
+  }
+
+  if (command === "birthday_cancel") {
+    const result = await callAppsScript<BotResult>(
+      "botCancelarFlujoCumpleanosTelegram",
+      { chatId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Operación cancelada."),
+      true
+    );
+    return;
+  }
+
+  if (!callback && !rawText.startsWith("/")) {
+    const birthdayFlow = await callAppsScript<BotResult>(
+      "botProcesarFlujoCumpleanosTelegram",
+      { chatId, texto: rawText }
+    );
+
+    if (birthdayFlow.activo || birthdayFlow.cancelado) {
+      await sendMessage(
+        chatId,
+        escapeHtml(birthdayFlow.texto || "Continúa con el siguiente paso."),
+        true,
+        birthdayFlow.activo
+          ? keyboardForBirthdayStep(birthdayFlow.paso)
+          : mainMenuKeyboard(true)
+      );
+      return;
+    }
+  }
 
   if (command === "students_menu") {
     await sendMessage(
