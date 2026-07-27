@@ -837,3 +837,44 @@ export async function eliminarHorarioSemanal(
     data: { idHorario },
   });
 }
+
+
+export type ExpedienteAlumno = {
+  idExpediente: string;
+  idAlumno: string;
+  foto: string;
+  firmaMaestra: string;
+  firmaRepresentante: string;
+  alergias: string;
+  condicionesMedicas: string;
+  contactoEmergencia: string;
+  telefonoEmergencia: string;
+  autorizaciones: string;
+  notasPrivadas: string;
+  fechaActualizacion: string;
+};
+
+export type DatosExpedienteAlumno =
+  Omit<ExpedienteAlumno, "idExpediente" | "fechaActualizacion">;
+
+export async function obtenerExpedienteAlumno(
+  token: string,
+  idAlumno: string
+) {
+  return llamarAppsScript<ExpedienteAlumno>({
+    action: "obtenerExpedienteAlumno",
+    token,
+    data: { idAlumno },
+  });
+}
+
+export async function guardarExpedienteAlumno(
+  token: string,
+  datos: DatosExpedienteAlumno
+) {
+  return llamarAppsScript<ExpedienteAlumno>({
+    action: "guardarExpedienteAlumno",
+    token,
+    data: datos,
+  });
+}

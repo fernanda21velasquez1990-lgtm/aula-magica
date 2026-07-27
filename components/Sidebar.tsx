@@ -8,6 +8,7 @@ import {
   Clock3,
   ClipboardCheck,
   FileBarChart,
+  FolderHeart,
   GraduationCap,
   Handshake,
   LayoutDashboard,
@@ -26,6 +27,7 @@ import { obtenerMaestra } from "@/lib/session";
 const items = [
   ["/dashboard", "Inicio", LayoutDashboard],
   ["/dashboard/alumnos", "Alumnos", Users],
+  ["/dashboard/expedientes", "Expedientes", FolderHeart],
   ["/dashboard/asistencia", "Asistencia", ClipboardCheck],
   ["/dashboard/calificaciones", "Notas", GraduationCap],
   ["/dashboard/planificacion", "Planes", CalendarDays],
@@ -98,7 +100,7 @@ export default function Sidebar() {
 
       <div className="sidebar-footer">
         <ThemeToggle />
-        <small>Versión profesional 9.0</small>
+        <small>Versión profesional 9.1</small>
       </div>
     </aside>
   );
