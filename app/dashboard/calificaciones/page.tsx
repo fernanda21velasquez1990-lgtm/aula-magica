@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   eliminarCalificacion,
@@ -68,12 +68,29 @@ export default function CalificacionesPage() {
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState("");
+  const [ultimaActualizacion, setUltimaActualizacion] = useState<Date | null>(null);
+  const [mostrarSincronizacion, setMostrarSincronizacion] = useState(false);
+  const temporizadorRef = useRef<number | null>(null);
+  const formularioRef = useRef(false);
+  const guardandoRef = useRef(false);
 
   useEffect(() => {
-    void cargarDatos();
+    formularioRef.current = mostrarFormulario;
+  }, [mostrarFormulario]);
+
+  useEffect(() => {
+    guardandoRef.current = guardando;
+  }, [guardando]);
+
+  useEffect(() => {
+    return () => {
+      if (temporizadorRef.current !== null) {
+        window.clearTimeout(temporizadorRef.current);
+      }
+    };
   }, []);
 
-  async function cargarDatos() {
+  const cargarDatos = useCallback(async (silencioso = false) => {
     const token = obtenerToken();
     if (!token) {
       eliminarSesion();
@@ -81,7 +98,7 @@ export default function CalificacionesPage() {
       return;
     }
 
-    setCargando(true);
+    if (!silencioso) setCargando(true);
     try {
       const [listaAlumnos, listaCalificaciones] = await Promise.all([
         listarAlumnos(token),
@@ -89,16 +106,58 @@ export default function CalificacionesPage() {
       ]);
       setAlumnos(listaAlumnos);
       setCalificaciones(listaCalificaciones);
+      setUltimaActualizacion(new Date());
+
+      if (!silencioso) {
+        setMostrarSincronizacion(true);
+
+        if (temporizadorRef.current !== null) {
+          window.clearTimeout(temporizadorRef.current);
+        }
+
+        temporizadorRef.current = window.setTimeout(() => {
+          setMostrarSincronizacion(false);
+          temporizadorRef.current = null;
+        }, 3000);
+      }
     } catch (error) {
-      setMensaje(
-        error instanceof Error
-          ? error.message
-          : "No se pudieron cargar las calificaciones."
-      );
+      if (!silencioso) {
+        setMensaje(
+          error instanceof Error
+            ? error.message
+            : "No se pudieron cargar las calificaciones."
+        );
+      }
     } finally {
-      setCargando(false);
+      if (!silencioso) setCargando(false);
     }
-  }
+  }, [router]);
+
+  useEffect(() => {
+    void cargarDatos();
+  }, [cargarDatos]);
+
+  useEffect(() => {
+    const actualizar = () => {
+      if (
+        document.visibilityState === "visible" &&
+        !formularioRef.current &&
+        !guardandoRef.current
+      ) {
+        void cargarDatos(true);
+      }
+    };
+
+    const intervalo = window.setInterval(actualizar, 10_000);
+    window.addEventListener("focus", actualizar);
+    document.addEventListener("visibilitychange", actualizar);
+
+    return () => {
+      window.clearInterval(intervalo);
+      window.removeEventListener("focus", actualizar);
+      document.removeEventListener("visibilitychange", actualizar);
+    };
+  }, [cargarDatos]);
 
   function abrirNueva() {
     setIdEditando(null);
@@ -256,14 +315,24 @@ export default function CalificacionesPage() {
           <h1>Calificaciones 📝</h1>
           <p>Registra notas, actividades y períodos de cada estudiante.</p>
         </div>
-        <button
-          type="button"
-          className="grades-primary-button"
-          onClick={abrirNueva}
-          disabled={alumnos.length === 0}
-        >
-          + Agregar calificación
-        </button>
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            className="grades-primary-button"
+            onClick={() => void cargarDatos()}
+            disabled={cargando || guardando}
+          >
+            🔄 Actualizar
+          </button>
+          <button
+            type="button"
+            className="grades-primary-button"
+            onClick={abrirNueva}
+            disabled={alumnos.length === 0}
+          >
+            + Agregar calificación
+          </button>
+        </div>
       </section>
 
       <section className="grades-summary">
@@ -300,6 +369,17 @@ export default function CalificacionesPage() {
           <option>Cuarto período</option>
         </select>
       </section>
+
+      {mostrarSincronizacion && ultimaActualizacion && !mensaje && (
+        <div className="grades-message" role="status" aria-live="polite">
+          ✅ Datos actualizados correctamente a las{" "}
+          {ultimaActualizacion.toLocaleTimeString("es-ES", {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          })}
+        </div>
+      )}
 
       {mensaje && <div className="grades-message">{mensaje}</div>}
 

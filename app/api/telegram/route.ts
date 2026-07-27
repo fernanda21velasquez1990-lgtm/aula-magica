@@ -313,6 +313,99 @@ function keyboardForPlanStep(step?: string) {
     : planCancelKeyboard();
 }
 
+
+function gradesMenuKeyboard() {
+  return {
+    inline_keyboard: [
+      [
+        { text: "📋 Ver resumen", callback_data: "notas" },
+        { text: "➕ Registrar nota", callback_data: "grade_create" },
+      ],
+      [{ text: "⬅️ Volver al menú", callback_data: "inicio" }],
+    ],
+  };
+}
+
+function gradeStudentListKeyboard(
+  students: Array<{ idAlumno: string; nombre: string }>
+) {
+  const rows = students.slice(0, 20).map((student) => [
+    {
+      text: `👩‍🎓 ${student.nombre}`,
+      callback_data: `grade_student:${student.idAlumno}`,
+    },
+  ]);
+  rows.push([{ text: "❌ Cancelar", callback_data: "grade_cancel" }]);
+  return { inline_keyboard: rows };
+}
+
+function gradeSubjectKeyboard() {
+  return {
+    inline_keyboard: [
+      [
+        { text: "➗ Matemática", callback_data: "grade_subject:MATEMATICA" },
+        { text: "📖 Lengua", callback_data: "grade_subject:LENGUA" },
+      ],
+      [
+        { text: "🔬 Naturales", callback_data: "grade_subject:NATURALES" },
+        { text: "🌎 Sociales", callback_data: "grade_subject:SOCIALES" },
+      ],
+      [
+        { text: "🎨 Artística", callback_data: "grade_subject:ARTISTICA" },
+        { text: "⚽ Educación Física", callback_data: "grade_subject:FISICA" },
+      ],
+      [
+        { text: "🤝 Formación", callback_data: "grade_subject:FORMACION" },
+        { text: "🇬🇧 Inglés", callback_data: "grade_subject:INGLES" },
+      ],
+      [{ text: "✍️ Otra asignatura", callback_data: "grade_subject:OTRA" }],
+      [{ text: "❌ Cancelar", callback_data: "grade_cancel" }],
+    ],
+  };
+}
+
+function gradePeriodKeyboard() {
+  return {
+    inline_keyboard: [
+      [
+        { text: "1.er período", callback_data: "grade_period:P1" },
+        { text: "2.º período", callback_data: "grade_period:P2" },
+      ],
+      [
+        { text: "3.er período", callback_data: "grade_period:P3" },
+        { text: "4.º período", callback_data: "grade_period:P4" },
+      ],
+      [{ text: "❌ Cancelar", callback_data: "grade_cancel" }],
+    ],
+  };
+}
+
+function gradeCancelKeyboard() {
+  return {
+    inline_keyboard: [
+      [{ text: "❌ Cancelar", callback_data: "grade_cancel" }],
+    ],
+  };
+}
+
+function gradeConfirmKeyboard() {
+  return {
+    inline_keyboard: [
+      [
+        { text: "✅ Guardar calificación", callback_data: "grade_confirm" },
+        { text: "❌ Cancelar", callback_data: "grade_cancel" },
+      ],
+    ],
+  };
+}
+
+function keyboardForGradeStep(step?: string) {
+  if (step === "ASIGNATURA") return gradeSubjectKeyboard();
+  if (step === "PERIODO") return gradePeriodKeyboard();
+  if (step === "CONFIRMAR") return gradeConfirmKeyboard();
+  return gradeCancelKeyboard();
+}
+
 function mainMenuKeyboard(linked = true) {
   const rows: InlineButton[][] = linked
     ? [
@@ -322,7 +415,7 @@ function mainMenuKeyboard(linked = true) {
         ],
         [
           { text: "✅ Asistencia", callback_data: "att_manage" },
-          { text: "📝 Notas", callback_data: "notas" },
+          { text: "📝 Notas", callback_data: "grades_menu" },
         ],
         [
           { text: "📚 Planes", callback_data: "plans_menu" },
@@ -390,6 +483,138 @@ async function handleUpdate(update: TelegramUpdate) {
   await answerCallback(callback?.id);
 
   const { command, argument } = commandFromText(rawText);
+
+  if (command === "grades_menu") {
+    await sendMessage(
+      chatId,
+      "📝 <b>Calificaciones</b>\n\nConsulta el resumen o registra una nota nueva.",
+      true,
+      gradesMenuKeyboard()
+    );
+    return;
+  }
+
+  if (command === "grade_create") {
+    const result = await callAppsScript<BotResult>(
+      "botIniciarCalificacionTelegram",
+      { chatId }
+    );
+    const students = result.alumnos || [];
+
+    if (!students.length) {
+      await sendMessage(chatId, "No hay alumnos registrados.", true);
+      return;
+    }
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Selecciona el alumno."),
+      true,
+      gradeStudentListKeyboard(students)
+    );
+    return;
+  }
+
+  if (command.startsWith("grade_student:")) {
+    const studentId = rawText.split(":")[1] || "";
+    if (!studentId) return;
+
+    const result = await callAppsScript<BotResult>(
+      "botSeleccionarAlumnoCalificacionTelegram",
+      { chatId, idAlumno: studentId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Selecciona la asignatura."),
+      true,
+      keyboardForGradeStep(result.paso)
+    );
+    return;
+  }
+
+  if (command.startsWith("grade_subject:")) {
+    const subject = rawText.split(":")[1] || "";
+    if (!subject) return;
+
+    const result = await callAppsScript<BotResult>(
+      "botSeleccionarAsignaturaCalificacionTelegram",
+      { chatId, asignatura: subject }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Escribe la actividad."),
+      true,
+      keyboardForGradeStep(result.paso)
+    );
+    return;
+  }
+
+  if (command.startsWith("grade_period:")) {
+    const period = rawText.split(":")[1] || "";
+    if (!period) return;
+
+    const result = await callAppsScript<BotResult>(
+      "botSeleccionarPeriodoCalificacionTelegram",
+      { chatId, periodo: period }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Escribe la calificación."),
+      true,
+      keyboardForGradeStep(result.paso)
+    );
+    return;
+  }
+
+  if (command === "grade_confirm") {
+    const result = await callAppsScript<BotResult>(
+      "botConfirmarCalificacionTelegram",
+      { chatId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Calificación guardada."),
+      true
+    );
+    return;
+  }
+
+  if (command === "grade_cancel") {
+    const result = await callAppsScript<BotResult>(
+      "botCancelarFlujoCalificacionTelegram",
+      { chatId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Operación cancelada."),
+      true
+    );
+    return;
+  }
+
+  if (!callback && !rawText.startsWith("/")) {
+    const gradeFlow = await callAppsScript<BotResult>(
+      "botProcesarFlujoCalificacionTelegram",
+      { chatId, texto: rawText }
+    );
+
+    if (gradeFlow.activo || gradeFlow.cancelado) {
+      await sendMessage(
+        chatId,
+        escapeHtml(gradeFlow.texto || "Continúa con el siguiente paso."),
+        true,
+        gradeFlow.activo
+          ? keyboardForGradeStep(gradeFlow.paso)
+          : mainMenuKeyboard(true)
+      );
+      return;
+    }
+  }
 
   if (command === "plans_menu") {
     await sendMessage(
