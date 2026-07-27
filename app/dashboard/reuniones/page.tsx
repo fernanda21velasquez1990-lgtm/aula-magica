@@ -54,6 +54,8 @@ export default function ReunionesPage() {
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState("");
   const [ultimaActualizacion, setUltimaActualizacion] = useState<Date | null>(null);
+  const [mostrarSincronizacion, setMostrarSincronizacion] = useState(false);
+  const temporizadorSincronizacionRef = useRef<number | null>(null);
   const formularioRef = useRef(false);
   const guardandoRef = useRef(false);
 
@@ -64,6 +66,14 @@ export default function ReunionesPage() {
   useEffect(() => {
     guardandoRef.current = guardando;
   }, [guardando]);
+
+  useEffect(() => {
+    return () => {
+      if (temporizadorSincronizacionRef.current !== null) {
+        window.clearTimeout(temporizadorSincronizacionRef.current);
+      }
+    };
+  }, []);
 
   const cargarReuniones = useCallback(async (silencioso = false) => {
     const token = obtenerToken();
@@ -77,6 +87,19 @@ export default function ReunionesPage() {
     try {
       setReuniones(await listarReuniones(token));
       setUltimaActualizacion(new Date());
+
+      if (!silencioso) {
+        setMostrarSincronizacion(true);
+
+        if (temporizadorSincronizacionRef.current !== null) {
+          window.clearTimeout(temporizadorSincronizacionRef.current);
+        }
+
+        temporizadorSincronizacionRef.current = window.setTimeout(() => {
+          setMostrarSincronizacion(false);
+          temporizadorSincronizacionRef.current = null;
+        }, 3000);
+      }
     } catch (error) {
       if (!silencioso) {
         setMensaje(
@@ -264,15 +287,14 @@ export default function ReunionesPage() {
         </select>
       </section>
 
-      {ultimaActualizacion && !mensaje && (
-        <div className="meetings-message">
-          🔄 Sincronizado con Google Sheets a las{" "}
+      {mostrarSincronizacion && ultimaActualizacion && !mensaje && (
+        <div className="meetings-message" role="status" aria-live="polite">
+          ✅ Datos actualizados correctamente a las{" "}
           {ultimaActualizacion.toLocaleTimeString("es-ES", {
             hour: "2-digit",
             minute: "2-digit",
             second: "2-digit",
           })}
-          {" · Actualización automática activa."}
         </div>
       )}
 
