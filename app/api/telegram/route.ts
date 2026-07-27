@@ -164,6 +164,26 @@ type BotResult = {
     descripcion?: string;
     estado: string;
   };
+  compras?: Array<{
+    idCompra: string;
+    idMaterial: string;
+    titulo: string;
+    precio: number;
+    estado: string;
+    archivoUrl?: string;
+  }>;
+  compra?: {
+    idCompra: string;
+    idMaterial: string;
+    titulo: string;
+    descripcion?: string;
+    categoria?: string;
+    nivel?: string;
+    precio: number;
+    estado: string;
+    archivoUrl?: string;
+    whatsapp?: string;
+  };
   preferencias?: {
     reuniones: boolean;
     agenda: boolean;
@@ -1378,6 +1398,67 @@ function planEditKeyboard(step?: string) {
   };
 }
 
+
+function vaultMenuKeyboard() {
+  return {
+    inline_keyboard: [
+      [{ text: "🧰 Ver mis compras", callback_data: "vault_purchases" }],
+      [{ text: "🌐 Abrir Mi Baúl", url: getAppUrl("/dashboard/baul") }],
+      [{ text: "⬅️ Volver al menú", callback_data: "inicio" }],
+    ],
+  };
+}
+
+function vaultPurchasesKeyboard(
+  purchases: Array<{
+    idCompra: string;
+    titulo: string;
+    estado: string;
+  }>
+) {
+  const rows = purchases.slice(0, 20).map((purchase) => [
+    {
+      text:
+        `${purchase.estado === "PAGADO" ? "🔓" : "⏳"} ` +
+        `${purchase.titulo}`,
+      callback_data: `vault_purchase:${purchase.idCompra}`,
+    },
+  ]);
+
+  rows.push([{ text: "⬅️ Volver", callback_data: "vault_menu" }]);
+  return { inline_keyboard: rows };
+}
+
+function vaultPurchaseKeyboard(purchase?: {
+  estado: string;
+  archivoUrl?: string;
+  whatsapp?: string;
+  idCompra: string;
+}) {
+  const rows: Array<Array<{ text: string; callback_data?: string; url?: string }>> = [];
+
+  if (purchase?.estado === "PAGADO" && purchase.archivoUrl) {
+    rows.push([
+      { text: "⬇️ Descargar material", url: purchase.archivoUrl },
+    ]);
+  }
+
+  if (purchase?.estado === "PENDIENTE" && purchase.whatsapp) {
+    const message = encodeURIComponent(
+      `Hola, deseo completar la compra ${purchase.idCompra}.`
+    );
+    rows.push([
+      {
+        text: "💬 Enviar comprobante",
+        url: `https://wa.me/${purchase.whatsapp.replace(/\D/g, "")}?text=${message}`,
+      },
+    ]);
+  }
+
+  rows.push([{ text: "⬅️ Volver", callback_data: "vault_purchases" }]);
+  return { inline_keyboard: rows };
+}
+
 function mainMenuKeyboard(linked = true) {
   const rows: InlineButton[][] = linked
     ? [
@@ -1398,6 +1479,7 @@ function mainMenuKeyboard(linked = true) {
           { text: "📅 Agenda", callback_data: "agenda_menu" },
         ],
         [{ text: "📊 Reportes", callback_data: "reports_menu" }],
+      [{ text: "🧰 Mi Baúl", callback_data: "vault_menu" }],
       [{ text: "⚙️ Configuración", callback_data: "settings_menu" }],
       [{ text: "❓ Ayuda", callback_data: "ayuda" }],
       ]
@@ -1457,6 +1539,60 @@ async function handleUpdate(update: TelegramUpdate) {
   await answerCallback(callback?.id);
 
   const { command, argument } = commandFromText(rawText);
+
+  if (command === "vault_menu") {
+    await sendMessage(
+      chatId,
+      "🧰 <b>Mi Baúl Digital</b>\n\nConsulta tus compras o abre el catálogo.",
+      true,
+      vaultMenuKeyboard()
+    );
+    return;
+  }
+
+  if (command === "vault_purchases") {
+    const result = await callAppsScript<BotResult>(
+      "botListarComprasBaulTelegram",
+      { chatId }
+    );
+
+    const purchases = result.compras || [];
+
+    if (!purchases.length) {
+      await sendMessage(
+        chatId,
+        escapeHtml(result.texto || "No tienes compras registradas."),
+        true,
+        vaultMenuKeyboard()
+      );
+      return;
+    }
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Selecciona una compra."),
+      true,
+      vaultPurchasesKeyboard(purchases)
+    );
+    return;
+  }
+
+  if (command.startsWith("vault_purchase:")) {
+    const purchaseId = rawText.split(":")[1] || "";
+
+    const result = await callAppsScript<BotResult>(
+      "botObtenerMaterialBaulTelegram",
+      { chatId, idCompra: purchaseId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Compra"),
+      true,
+      vaultPurchaseKeyboard(result.compra)
+    );
+    return;
+  }
 
   if (command === "settings_menu") {
     await sendMessage(

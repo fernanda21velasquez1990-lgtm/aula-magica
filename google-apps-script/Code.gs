@@ -52,7 +52,7 @@ function crearEstructuraInicial() {
   const config = ss.getSheetByName('CONFIGURACION');
   if (config.getLastRow() < 2) config.getRange(2,1,11,3).setValues([
     ['NOMBRE_APLICACION',APP_NAME,'Nombre mostrado en la plataforma'],
-    ['VERSION','5.3.0','Versión actual'],
+    ['VERSION','5.4.0','Versión actual'],
     ['SESION_HORAS','24','Duración de sesión'],
     ['REGISTRO_PUBLICO','SI','Permitir registro'],
     ['TELEGRAM_ACTIVO','NO','Estado del bot'],
@@ -71,7 +71,7 @@ function doGet() {
     ok: true,
     aplicacion: APP_NAME,
     estado: 'API funcionando',
-    version: '5.3.0'
+    version: '5.4.0'
   });
 }
 function doPost(e) {
@@ -101,6 +101,8 @@ function doPost(e) {
       case 'botCambiarPreferenciaAvisoTelegram': resultado=botCambiarPreferenciaAvisoTelegram(datos); break;
       case 'botCambiarTodosAvisosTelegram': resultado=botCambiarTodosAvisosTelegram(datos); break;
       case 'botProbarAvisosTelegram': resultado=botProbarAvisosTelegram(datos); break;
+      case 'botListarComprasBaulTelegram': resultado=botListarComprasBaulTelegram(datos); break;
+      case 'botObtenerMaterialBaulTelegram': resultado=botObtenerMaterialBaulTelegram(datos); break;
       case 'listarCalificaciones': resultado=listarCalificaciones(token); break;
       case 'guardarCalificacion': resultado=guardarCalificacion(token,datos); break;
       case 'eliminarCalificacion': resultado=eliminarCalificacion(token,datos); break;
@@ -7127,6 +7129,162 @@ function botProbarAvisosTelegram(datos){
 }
 
 
+function botListarComprasBaulTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  const idMaestra=enlace.idMaestra;
+
+  const materiales=obtenerRegistros('MATERIALES_BAUL');
+  const materialPorId={};
+
+  materiales.forEach(r=>{
+    materialPorId[String(r.ID_MATERIAL||'').trim()]=r;
+  });
+
+  const compras=obtenerRegistros('COMPRAS_BAUL')
+    .filter(r=>
+      String(r.ID_MAESTRA||'').trim()===idMaestra
+    )
+    .map(r=>{
+      const material=materialPorId[String(r.ID_MATERIAL||'').trim()]||{};
+      return {
+        idCompra:String(r.ID_COMPRA||''),
+        idMaterial:String(r.ID_MATERIAL||''),
+        titulo:String(material.TITULO||'Material'),
+        precio:Number(r.MONTO||material.PRECIO||0),
+        estado:String(r.ESTADO||'PENDIENTE').toUpperCase(),
+        archivoUrl:
+          String(r.ESTADO||'').trim().toUpperCase()==='PAGADO'
+            ?String(material.ARCHIVO_URL||'')
+            :''
+      };
+    })
+    .sort((a,b)=>
+      a.estado.localeCompare(b.estado)||
+      a.titulo.localeCompare(b.titulo)
+    );
+
+  const pendientes=compras.filter(c=>c.estado==='PENDIENTE');
+  const desbloqueadas=compras.filter(c=>c.estado==='PAGADO');
+
+  return {
+    compras:compras,
+    texto:[
+      '🧰 Mi Baúl Digital',
+      '',
+      '🔓 Materiales desbloqueados: '+desbloqueadas.length,
+      '⏳ Compras pendientes: '+pendientes.length,
+      '',
+      compras.length
+        ?'Selecciona un material para ver los detalles.'
+        :'Todavía no tienes compras registradas.'
+    ].join('\n')
+  };
+}
+
+function botObtenerMaterialBaulTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['idCompra']);
+
+  const compra=obtenerRegistros('COMPRAS_BAUL').find(r=>
+    String(r.ID_COMPRA||'').trim()===String(datos.idCompra||'').trim()&&
+    String(r.ID_MAESTRA||'').trim()===enlace.idMaestra
+  );
+
+  if(!compra)throw new Error('No se encontró la compra.');
+
+  const material=obtenerRegistros('MATERIALES_BAUL').find(r=>
+    String(r.ID_MATERIAL||'').trim()===
+      String(compra.ID_MATERIAL||'').trim()
+  );
+
+  if(!material)throw new Error('No se encontró el material.');
+
+  const estado=String(compra.ESTADO||'PENDIENTE').toUpperCase();
+  const pago=obtenerConfiguracionBaul();
+
+  return {
+    compra:{
+      idCompra:String(compra.ID_COMPRA||''),
+      idMaterial:String(compra.ID_MATERIAL||''),
+      titulo:String(material.TITULO||'Material'),
+      descripcion:String(material.DESCRIPCION||''),
+      categoria:String(material.CATEGORIA||'Otros'),
+      nivel:String(material.NIVEL||'Todos'),
+      precio:Number(compra.MONTO||material.PRECIO||0),
+      estado:estado,
+      archivoUrl:estado==='PAGADO'?String(material.ARCHIVO_URL||''):'',
+      whatsapp:pago.whatsapp
+    },
+    texto:[
+      estado==='PAGADO'?'🔓 Material desbloqueado':'⏳ Compra pendiente',
+      '',
+      'Material: '+String(material.TITULO||'Material'),
+      'Categoría: '+String(material.CATEGORIA||'Otros'),
+      'Nivel: '+String(material.NIVEL||'Todos'),
+      'Estado: '+capitalizarTelegram(estado),
+      'Solicitud: '+String(compra.ID_COMPRA||'')
+    ].join('\n')
+  };
+}
+
+function procesarNotificacionesComprasBaulTelegram(){
+  const enlaces=obtenerEnlacesTelegramActivosRecordatorios();
+  const chatPorMaestra={};
+
+  enlaces.forEach(enlace=>{
+    chatPorMaestra[enlace.idMaestra]=enlace.chatId;
+  });
+
+  const propiedades=PropertiesService.getScriptProperties();
+  const materiales=obtenerRegistros('MATERIALES_BAUL');
+  const materialPorId={};
+
+  materiales.forEach(r=>{
+    materialPorId[String(r.ID_MATERIAL||'').trim()]=r;
+  });
+
+  let enviados=0;
+
+  obtenerRegistros('COMPRAS_BAUL')
+    .filter(r=>
+      String(r.ESTADO||'').trim().toUpperCase()==='PAGADO'
+    )
+    .forEach(compra=>{
+      const idCompra=String(compra.ID_COMPRA||'').trim();
+      const idMaestra=String(compra.ID_MAESTRA||'').trim();
+      const chatId=chatPorMaestra[idMaestra];
+      const clave='BAUL_PAGO_NOTIFICADO_'+idCompra;
+
+      if(!chatId||propiedades.getProperty(clave)==='SI')return;
+
+      const material=materialPorId[
+        String(compra.ID_MATERIAL||'').trim()
+      ];
+
+      if(!material)return;
+
+      const archivo=String(material.ARCHIVO_URL||'').trim();
+
+      const texto=[
+        '🎉 ¡Tu material fue desbloqueado!',
+        '',
+        '📚 '+String(material.TITULO||'Material'),
+        '✅ Pago confirmado',
+        '',
+        archivo
+          ?'⬇️ Descargar: '+archivo
+          :'Abre Mi Baúl en la plataforma para descargarlo.'
+      ].join('\n');
+
+      enviarMensajeTelegram(chatId,texto,false);
+      propiedades.setProperty(clave,'SI');
+      enviados++;
+    });
+
+  return enviados;
+}
+
+
 function construirRecordatorioMananaTelegram(
   idMaestra,
   hoy,
@@ -7338,7 +7496,7 @@ function procesarRecordatoriosAutomaticos(forzarPrueba){
   const hora=Number(Utilities.formatDate(ahora,zona,'H'));
   const manana=sumarDiasFechaTelegram(hoy,1);
   const enlaces=obtenerEnlacesTelegramActivosRecordatorios();
-  let enviados=0;
+  let enviados=procesarNotificacionesComprasBaulTelegram();
 
   enlaces.forEach(enlace=>{
     try{
