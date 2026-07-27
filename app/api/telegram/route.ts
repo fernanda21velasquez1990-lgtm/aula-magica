@@ -164,6 +164,14 @@ type BotResult = {
     descripcion?: string;
     estado: string;
   };
+  preferencias?: {
+    reuniones: boolean;
+    agenda: boolean;
+    cumpleanos: boolean;
+    planificaciones: boolean;
+    asistencia: boolean;
+  };
+  enviados?: number;
   perfil?: {
     idMaestra: string;
     nombre: string;
@@ -691,7 +699,63 @@ function settingsMenuKeyboard() {
         { text: "👤 Ver perfil", callback_data: "settings_view" },
         { text: "✏️ Editar perfil", callback_data: "settings_edit" },
       ],
+      [{ text: "🔔 Configurar avisos", callback_data: "alerts_menu" }],
       [{ text: "⬅️ Volver al menú", callback_data: "inicio" }],
+    ],
+  };
+}
+
+function alertsKeyboard(preferences?: {
+  reuniones: boolean;
+  agenda: boolean;
+  cumpleanos: boolean;
+  planificaciones: boolean;
+  asistencia: boolean;
+}) {
+  const prefs = preferences || {
+    reuniones: true,
+    agenda: true,
+    cumpleanos: true,
+    planificaciones: true,
+    asistencia: true,
+  };
+
+  const icon = (active: boolean) => (active ? "✅" : "❌");
+
+  return {
+    inline_keyboard: [
+      [
+        {
+          text: `${icon(prefs.reuniones)} Reuniones`,
+          callback_data: "alert_toggle:reuniones",
+        },
+        {
+          text: `${icon(prefs.agenda)} Agenda`,
+          callback_data: "alert_toggle:agenda",
+        },
+      ],
+      [
+        {
+          text: `${icon(prefs.cumpleanos)} Cumpleaños`,
+          callback_data: "alert_toggle:cumpleanos",
+        },
+        {
+          text: `${icon(prefs.planificaciones)} Planes`,
+          callback_data: "alert_toggle:planificaciones",
+        },
+      ],
+      [
+        {
+          text: `${icon(prefs.asistencia)} Asistencia`,
+          callback_data: "alert_toggle:asistencia",
+        },
+      ],
+      [
+        { text: "🔔 Activar todos", callback_data: "alerts_all:on" },
+        { text: "🔕 Desactivar todos", callback_data: "alerts_all:off" },
+      ],
+      [{ text: "🧪 Probar avisos", callback_data: "alerts_test" }],
+      [{ text: "⬅️ Volver", callback_data: "settings_menu" }],
     ],
   };
 }
@@ -1400,6 +1464,70 @@ async function handleUpdate(update: TelegramUpdate) {
       "⚙️ <b>Configuración</b>\n\nConsulta o actualiza el perfil de la maestra.",
       true,
       settingsMenuKeyboard()
+    );
+    return;
+  }
+
+  if (command === "alerts_menu") {
+    const result = await callAppsScript<BotResult>(
+      "botObtenerPreferenciasAvisosTelegram",
+      { chatId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Configura tus avisos."),
+      true,
+      alertsKeyboard(result.preferencias)
+    );
+    return;
+  }
+
+  if (command.startsWith("alert_toggle:")) {
+    const tipo = rawText.split(":")[1] || "";
+
+    const result = await callAppsScript<BotResult>(
+      "botCambiarPreferenciaAvisoTelegram",
+      { chatId, tipo }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Preferencia actualizada."),
+      true,
+      alertsKeyboard(result.preferencias)
+    );
+    return;
+  }
+
+  if (command.startsWith("alerts_all:")) {
+    const value = rawText.split(":")[1] || "";
+    const activo = value === "on";
+
+    const result = await callAppsScript<BotResult>(
+      "botCambiarTodosAvisosTelegram",
+      { chatId, activo }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Preferencias actualizadas."),
+      true,
+      alertsKeyboard(result.preferencias)
+    );
+    return;
+  }
+
+  if (command === "alerts_test") {
+    const result = await callAppsScript<BotResult>(
+      "botProbarAvisosTelegram",
+      { chatId }
+    );
+
+    await sendMessage(
+      chatId,
+      escapeHtml(result.texto || "Prueba terminada."),
+      true
     );
     return;
   }

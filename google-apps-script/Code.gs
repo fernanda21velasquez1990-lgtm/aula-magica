@@ -52,7 +52,7 @@ function crearEstructuraInicial() {
   const config = ss.getSheetByName('CONFIGURACION');
   if (config.getLastRow() < 2) config.getRange(2,1,11,3).setValues([
     ['NOMBRE_APLICACION',APP_NAME,'Nombre mostrado en la plataforma'],
-    ['VERSION','5.2.0','Versión actual'],
+    ['VERSION','5.3.0','Versión actual'],
     ['SESION_HORAS','24','Duración de sesión'],
     ['REGISTRO_PUBLICO','SI','Permitir registro'],
     ['TELEGRAM_ACTIVO','NO','Estado del bot'],
@@ -71,7 +71,7 @@ function doGet() {
     ok: true,
     aplicacion: APP_NAME,
     estado: 'API funcionando',
-    version: '5.2.0'
+    version: '5.3.0'
   });
 }
 function doPost(e) {
@@ -97,6 +97,10 @@ function doPost(e) {
       case 'listarResumenMensualAsistencia': resultado=listarResumenMensualAsistencia(token,datos); break;
       case 'listarMaterialesBaul': resultado=listarMaterialesBaul(token,datos); break;
       case 'solicitarCompraBaul': resultado=solicitarCompraBaul(token,datos); break;
+      case 'botObtenerPreferenciasAvisosTelegram': resultado=botObtenerPreferenciasAvisosTelegram(datos); break;
+      case 'botCambiarPreferenciaAvisoTelegram': resultado=botCambiarPreferenciaAvisoTelegram(datos); break;
+      case 'botCambiarTodosAvisosTelegram': resultado=botCambiarTodosAvisosTelegram(datos); break;
+      case 'botProbarAvisosTelegram': resultado=botProbarAvisosTelegram(datos); break;
       case 'listarCalificaciones': resultado=listarCalificaciones(token); break;
       case 'guardarCalificacion': resultado=guardarCalificacion(token,datos); break;
       case 'eliminarCalificacion': resultado=eliminarCalificacion(token,datos); break;
@@ -6935,127 +6939,343 @@ function nombreMaestraRecordatorioTelegram(idMaestra){
   ).trim()||'Maestra';
 }
 
-function construirRecordatorioMananaTelegram(idMaestra,hoy,manana){
+function clavePreferenciasAvisosTelegram(idMaestra){
+  return 'PREFERENCIAS_AVISOS_TELEGRAM_'+String(idMaestra||'').trim();
+}
+
+function preferenciasAvisosPorDefectoTelegram(){
+  return {
+    reuniones:true,
+    agenda:true,
+    cumpleanos:true,
+    planificaciones:true,
+    asistencia:true
+  };
+}
+
+function obtenerPreferenciasAvisosTelegram(idMaestra){
+  const clave=clavePreferenciasAvisosTelegram(idMaestra);
+  const valor=PropertiesService.getScriptProperties().getProperty(clave);
+  const defecto=preferenciasAvisosPorDefectoTelegram();
+
+  if(!valor)return defecto;
+
+  try{
+    const guardadas=JSON.parse(valor);
+    return {
+      reuniones:guardadas.reuniones!==false,
+      agenda:guardadas.agenda!==false,
+      cumpleanos:guardadas.cumpleanos!==false,
+      planificaciones:guardadas.planificaciones!==false,
+      asistencia:guardadas.asistencia!==false
+    };
+  }catch(_){
+    return defecto;
+  }
+}
+
+function guardarPreferenciasAvisosTelegram(idMaestra,preferencias){
+  const limpias={
+    reuniones:Boolean(preferencias.reuniones),
+    agenda:Boolean(preferencias.agenda),
+    cumpleanos:Boolean(preferencias.cumpleanos),
+    planificaciones:Boolean(preferencias.planificaciones),
+    asistencia:Boolean(preferencias.asistencia)
+  };
+
+  PropertiesService.getScriptProperties().setProperty(
+    clavePreferenciasAvisosTelegram(idMaestra),
+    JSON.stringify(limpias)
+  );
+
+  return limpias;
+}
+
+function textoPreferenciasAvisosTelegram(preferencias){
+  function estado(valor){
+    return valor?'✅ Activado':'❌ Desactivado';
+  }
+
+  return [
+    '🔔 Avisos automáticos',
+    '',
+    'Configura cuáles recordatorios deseas recibir:',
+    '',
+    '🤝 Reuniones: '+estado(preferencias.reuniones),
+    '📅 Agenda: '+estado(preferencias.agenda),
+    '🎂 Cumpleaños: '+estado(preferencias.cumpleanos),
+    '📚 Planificaciones: '+estado(preferencias.planificaciones),
+    '✅ Resumen de asistencia: '+estado(preferencias.asistencia)
+  ].join('\n');
+}
+
+function botObtenerPreferenciasAvisosTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  const preferencias=obtenerPreferenciasAvisosTelegram(enlace.idMaestra);
+
+  return {
+    preferencias:preferencias,
+    texto:textoPreferenciasAvisosTelegram(preferencias)
+  };
+}
+
+function botCambiarPreferenciaAvisoTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['tipo']);
+
+  const tipo=String(datos.tipo||'').trim().toLowerCase();
+  const permitidos=[
+    'reuniones',
+    'agenda',
+    'cumpleanos',
+    'planificaciones',
+    'asistencia'
+  ];
+
+  if(!permitidos.includes(tipo)){
+    throw new Error('El tipo de aviso no es válido.');
+  }
+
+  const preferencias=obtenerPreferenciasAvisosTelegram(enlace.idMaestra);
+  preferencias[tipo]=!Boolean(preferencias[tipo]);
+
+  const guardadas=guardarPreferenciasAvisosTelegram(
+    enlace.idMaestra,
+    preferencias
+  );
+
+  registrarAuditoria(
+    enlace.idMaestra,
+    'EDITAR',
+    'TELEGRAM',
+    'Preferencia de aviso cambiada: '+tipo
+  );
+
+  return {
+    preferencias:guardadas,
+    texto:textoPreferenciasAvisosTelegram(guardadas)
+  };
+}
+
+function botCambiarTodosAvisosTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  validarObjeto(datos,['activo']);
+
+  const activo=Boolean(datos.activo);
+  const preferencias=guardarPreferenciasAvisosTelegram(
+    enlace.idMaestra,
+    {
+      reuniones:activo,
+      agenda:activo,
+      cumpleanos:activo,
+      planificaciones:activo,
+      asistencia:activo
+    }
+  );
+
+  registrarAuditoria(
+    enlace.idMaestra,
+    'EDITAR',
+    'TELEGRAM',
+    activo?'Todos los avisos activados':'Todos los avisos desactivados'
+  );
+
+  return {
+    preferencias:preferencias,
+    texto:textoPreferenciasAvisosTelegram(preferencias)
+  };
+}
+
+function botProbarAvisosTelegram(datos){
+  const enlace=obtenerMaestraTelegramPorChat(datos);
+  const zona=obtenerZonaHorariaAulaMagica();
+  const hoy=Utilities.formatDate(new Date(),zona,'yyyy-MM-dd');
+  const manana=sumarDiasFechaTelegram(hoy,1);
+  const preferencias=obtenerPreferenciasAvisosTelegram(enlace.idMaestra);
+  const mensajes=[];
+
+  const mananaTexto=construirRecordatorioMananaTelegram(
+    enlace.idMaestra,
+    hoy,
+    manana,
+    preferencias
+  );
+
+  if(mananaTexto)mensajes.push(mananaTexto);
+
+  if(preferencias.asistencia){
+    mensajes.push(
+      construirResumenAsistenciaTelegram(enlace.idMaestra,hoy)
+    );
+  }
+
+  if(!mensajes.length){
+    return {
+      enviados:0,
+      texto:'🔕 Todos los avisos están desactivados.'
+    };
+  }
+
+  mensajes.forEach(texto=>{
+    enviarMensajeTelegram(enlace.chatId,texto,false);
+  });
+
+  return {
+    enviados:mensajes.length,
+    texto:'✅ Prueba enviada correctamente.'
+  };
+}
+
+
+function construirRecordatorioMananaTelegram(
+  idMaestra,
+  hoy,
+  manana,
+  preferencias
+){
+  const prefs=preferencias||obtenerPreferenciasAvisosTelegram(idMaestra);
   const lineas=[
     '🌅 Buenos días, '+nombreMaestraRecordatorioTelegram(idMaestra),
     '',
-    'Este es tu resumen de Aula Mágica.'
+    'Este es tu resumen personalizado de Aula Mágica.'
   ];
 
-  const reuniones=obtenerRegistros('REUNIONES')
-    .filter(r=>
-      String(r.ID_MAESTRA||'').trim()===idMaestra&&
-      !['REALIZADA','CANCELADA'].includes(
-        String(r.ESTADO||'').trim().toUpperCase()
-      )&&
-      [hoy,manana].includes(normalizarFechaTextoTelegram(r.FECHA))
-    )
-    .sort((a,b)=>
-      (
-        normalizarFechaTextoTelegram(a.FECHA)+' '+
-        normalizarHoraVisibleAgenda(a.HORA)
-      ).localeCompare(
-        normalizarFechaTextoTelegram(b.FECHA)+' '+
-        normalizarHoraVisibleAgenda(b.HORA)
+  let secciones=0;
+  let totalPendientes=0;
+
+  if(prefs.reuniones){
+    const reuniones=obtenerRegistros('REUNIONES')
+      .filter(r=>
+        String(r.ID_MAESTRA||'').trim()===idMaestra&&
+        !['REALIZADA','CANCELADA'].includes(
+          String(r.ESTADO||'').trim().toUpperCase()
+        )&&
+        [hoy,manana].includes(normalizarFechaTextoTelegram(r.FECHA))
       )
-    );
+      .sort((a,b)=>
+        (
+          normalizarFechaTextoTelegram(a.FECHA)+' '+
+          normalizarHoraVisibleAgenda(a.HORA)
+        ).localeCompare(
+          normalizarFechaTextoTelegram(b.FECHA)+' '+
+          normalizarHoraVisibleAgenda(b.HORA)
+        )
+      );
 
-  const eventos=obtenerRegistrosAgenda()
-    .filter(r=>
-      String(r.ID_MAESTRA||'').trim()===idMaestra&&
-      String(r.ESTADO||'').trim().toUpperCase()==='PENDIENTE'&&
-      [hoy,manana].includes(normalizarFechaVisibleAgenda(r.FECHA))
-    )
-    .sort((a,b)=>
-      (
-        normalizarFechaVisibleAgenda(a.FECHA)+' '+
-        normalizarHoraVisibleAgenda(a.HORA)
-      ).localeCompare(
-        normalizarFechaVisibleAgenda(b.FECHA)+' '+
-        normalizarHoraVisibleAgenda(b.HORA)
-      )
-    );
+    lineas.push('');
+    lineas.push('🤝 Reuniones de hoy y mañana: '+reuniones.length);
 
-  const alumnos=obtenerRegistros('ALUMNOS').filter(r=>
-    String(r.ID_MAESTRA||'').trim()===idMaestra&&
-    String(r.ESTADO||'').trim().toUpperCase()==='ACTIVO'
-  );
-
-  const mesDiaHoy=hoy.slice(5);
-  const cumpleanos=alumnos
-    .filter(r=>{
-      const fecha=formatearFechaParaFormulario(r.FECHA_NACIMIENTO);
-      return fecha&&fecha.slice(5)===mesDiaHoy;
-    })
-    .map(r=>(
-      String(r.NOMBRE||'')+' '+String(r.APELLIDO||'')
-    ).trim());
-
-  const planes=obtenerRegistros('PLANIFICACION')
-    .filter(r=>{
-      if(String(r.ID_MAESTRA||'').trim()!==idMaestra)return false;
-      if(String(r.ESTADO||'').trim().toUpperCase()==='COMPLETADA')return false;
-
+    reuniones.slice(0,5).forEach(r=>{
       const fecha=normalizarFechaTextoTelegram(r.FECHA);
-      return fecha&&fecha<=manana;
-    })
-    .sort((a,b)=>
-      normalizarFechaTextoTelegram(a.FECHA)
-        .localeCompare(normalizarFechaTextoTelegram(b.FECHA))
-    )
-    .slice(0,8);
+      const cuando=fecha===hoy?'Hoy':'Mañana';
 
-  lineas.push('');
-  lineas.push('🤝 Reuniones de hoy y mañana: '+reuniones.length);
+      lineas.push(
+        '• '+cuando+' '+normalizarHoraVisibleAgenda(r.HORA)+
+        ' · '+String(r.TITULO||'Reunión')
+      );
+    });
 
-  reuniones.slice(0,5).forEach(r=>{
-    const fecha=normalizarFechaTextoTelegram(r.FECHA);
-    const cuando=fecha===hoy?'Hoy':'Mañana';
+    totalPendientes+=reuniones.length;
+    secciones++;
+  }
 
-    lineas.push(
-      '• '+cuando+' '+normalizarHoraVisibleAgenda(r.HORA)+
-      ' · '+String(r.TITULO||'Reunión')
-    );
-  });
+  if(prefs.agenda){
+    const eventos=obtenerRegistrosAgenda()
+      .filter(r=>
+        String(r.ID_MAESTRA||'').trim()===idMaestra&&
+        String(r.ESTADO||'').trim().toUpperCase()==='PENDIENTE'&&
+        [hoy,manana].includes(normalizarFechaVisibleAgenda(r.FECHA))
+      )
+      .sort((a,b)=>
+        (
+          normalizarFechaVisibleAgenda(a.FECHA)+' '+
+          normalizarHoraVisibleAgenda(a.HORA)
+        ).localeCompare(
+          normalizarFechaVisibleAgenda(b.FECHA)+' '+
+          normalizarHoraVisibleAgenda(b.HORA)
+        )
+      );
 
-  lineas.push('');
-  lineas.push('📅 Eventos de hoy y mañana: '+eventos.length);
+    lineas.push('');
+    lineas.push('📅 Eventos de hoy y mañana: '+eventos.length);
 
-  eventos.slice(0,5).forEach(r=>{
-    const fecha=normalizarFechaVisibleAgenda(r.FECHA);
-    const cuando=fecha===hoy?'Hoy':'Mañana';
+    eventos.slice(0,5).forEach(r=>{
+      const fecha=normalizarFechaVisibleAgenda(r.FECHA);
+      const cuando=fecha===hoy?'Hoy':'Mañana';
 
-    lineas.push(
-      '• '+cuando+' '+normalizarHoraVisibleAgenda(r.HORA)+
-      ' · '+String(r.TITULO||'Evento')
-    );
-  });
+      lineas.push(
+        '• '+cuando+' '+normalizarHoraVisibleAgenda(r.HORA)+
+        ' · '+String(r.TITULO||'Evento')
+      );
+    });
 
-  lineas.push('');
-  lineas.push('🎂 Cumpleaños de hoy: '+cumpleanos.length);
+    totalPendientes+=eventos.length;
+    secciones++;
+  }
 
-  cumpleanos.slice(0,8).forEach(nombre=>{
-    lineas.push('• '+nombre);
-  });
+  if(prefs.cumpleanos){
+    const mesDiaHoy=hoy.slice(5);
 
-  lineas.push('');
-  lineas.push('📚 Planificaciones pendientes: '+planes.length);
+    const cumpleanos=obtenerRegistros('ALUMNOS')
+      .filter(r=>
+        String(r.ID_MAESTRA||'').trim()===idMaestra&&
+        String(r.ESTADO||'').trim().toUpperCase()==='ACTIVO'
+      )
+      .filter(r=>{
+        const fecha=formatearFechaParaFormulario(r.FECHA_NACIMIENTO);
+        return fecha&&fecha.slice(5)===mesDiaHoy;
+      })
+      .map(r=>(
+        String(r.NOMBRE||'')+' '+String(r.APELLIDO||'')
+      ).trim());
 
-  planes.slice(0,5).forEach(r=>{
-    const fecha=normalizarFechaTextoTelegram(r.FECHA);
-    const etiqueta=fecha<hoy?'Vencida':(fecha===hoy?'Hoy':'Mañana');
+    lineas.push('');
+    lineas.push('🎂 Cumpleaños de hoy: '+cumpleanos.length);
 
-    lineas.push(
-      '• '+etiqueta+' · '+String(r.TITULO||'Planificación')
-    );
-  });
+    cumpleanos.slice(0,8).forEach(nombre=>{
+      lineas.push('• '+nombre);
+    });
 
-  if(
-    !reuniones.length&&
-    !eventos.length&&
-    !cumpleanos.length&&
-    !planes.length
-  ){
+    totalPendientes+=cumpleanos.length;
+    secciones++;
+  }
+
+  if(prefs.planificaciones){
+    const planes=obtenerRegistros('PLANIFICACION')
+      .filter(r=>{
+        if(String(r.ID_MAESTRA||'').trim()!==idMaestra)return false;
+        if(
+          String(r.ESTADO||'').trim().toUpperCase()==='COMPLETADA'
+        )return false;
+
+        const fecha=normalizarFechaTextoTelegram(r.FECHA);
+        return fecha&&fecha<=manana;
+      })
+      .sort((a,b)=>
+        normalizarFechaTextoTelegram(a.FECHA)
+          .localeCompare(normalizarFechaTextoTelegram(b.FECHA))
+      )
+      .slice(0,8);
+
+    lineas.push('');
+    lineas.push('📚 Planificaciones pendientes: '+planes.length);
+
+    planes.slice(0,5).forEach(r=>{
+      const fecha=normalizarFechaTextoTelegram(r.FECHA);
+      const etiqueta=fecha<hoy?'Vencida':(fecha===hoy?'Hoy':'Mañana');
+
+      lineas.push(
+        '• '+etiqueta+' · '+String(r.TITULO||'Planificación')
+      );
+    });
+
+    totalPendientes+=planes.length;
+    secciones++;
+  }
+
+  if(!secciones)return '';
+
+  if(!totalPendientes){
     lineas.push('');
     lineas.push('✨ No tienes pendientes importantes para hoy.');
   }
@@ -7122,28 +7342,43 @@ function procesarRecordatoriosAutomaticos(forzarPrueba){
 
   enlaces.forEach(enlace=>{
     try{
+      const preferencias=obtenerPreferenciasAvisosTelegram(
+        enlace.idMaestra
+      );
+
+      const tieneAvisoManana=
+        preferencias.reuniones||
+        preferencias.agenda||
+        preferencias.cumpleanos||
+        preferencias.planificaciones;
+
       const enviarManana=
-        Boolean(forzarPrueba)||
+        tieneAvisoManana&&
         (
-          hora>=7&&
-          hora<=10&&
-          !avisoAutomaticoYaEnviadoTelegram(
-            'MANANA',
-            enlace.idMaestra,
-            hoy
+          Boolean(forzarPrueba)||
+          (
+            hora>=7&&
+            hora<=10&&
+            !avisoAutomaticoYaEnviadoTelegram(
+              'MANANA',
+              enlace.idMaestra,
+              hoy
+            )
           )
         );
 
       if(enviarManana){
-        enviarMensajeTelegram(
-          enlace.chatId,
-          construirRecordatorioMananaTelegram(
-            enlace.idMaestra,
-            hoy,
-            manana
-          ),
-          false
+        const texto=construirRecordatorioMananaTelegram(
+          enlace.idMaestra,
+          hoy,
+          manana,
+          preferencias
         );
+
+        if(texto){
+          enviarMensajeTelegram(enlace.chatId,texto,false);
+          enviados++;
+        }
 
         if(!forzarPrueba){
           marcarAvisoAutomaticoTelegram(
@@ -7152,11 +7387,10 @@ function procesarRecordatoriosAutomaticos(forzarPrueba){
             hoy
           );
         }
-
-        enviados++;
       }
 
       const enviarAsistencia=
+        preferencias.asistencia&&
         !forzarPrueba&&
         hora>=17&&
         hora<=20&&
