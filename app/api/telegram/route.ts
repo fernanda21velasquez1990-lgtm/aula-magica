@@ -3597,12 +3597,21 @@ export async function POST(request: NextRequest) {
     );
 
     if (chatId) {
+      const rawMessage =
+        error instanceof Error ? error.message : "Error desconocido";
+
+      const subscriptionExpired = rawMessage.startsWith(
+        "SUSCRIPCION_REQUERIDA:"
+      );
+
+      const cleanMessage = subscriptionExpired
+        ? rawMessage.replace("SUSCRIPCION_REQUERIDA:", "")
+        : `⚠️ No se pudo completar la operación.\n\n${rawMessage}`;
+
       await sendMessage(
         chatId,
-        `⚠️ No se pudo completar la operación.\n\n${escapeHtml(
-          error instanceof Error ? error.message : "Error desconocido"
-        )}`,
-        false
+        escapeHtml(cleanMessage),
+        !subscriptionExpired
       ).catch(() => undefined);
     }
 
